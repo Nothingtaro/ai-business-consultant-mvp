@@ -1,0 +1,20 @@
+[
+  {
+    "name": "Premium SaaS Tier Launch",
+    "problem": "Should we launch a premium subscription tier for SMB customers?",
+    "budget": "$500k launch budget",
+    "geography": "United States",
+    "target_customers": "B2B SaaS companies with 20-250 employees",
+    "constraints": "Must launch within 90 days; no new engineering hires",
+    "expected_output": "A go/no-go recommendation with financial assumptions"
+  },
+  {
+    "name": "Retail Market Entry",
+    "problem": "Should our specialty coffee brand enter the Bangkok retail market?",
+    "budget": "$250k for market entry testing",
+    "geography": "Bangkok, Thailand",
+    "target_customers": "Urban professionals and premium coffee consumers",
+    "constraints": "Use existing supply chain; avoid long-term leases during pilot",
+    "expected_output": "A pilot plan, investment logic, and recommendation"
+  }
+]
