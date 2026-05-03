@@ -1,3 +1,5 @@
+<img width="1999" height="1091" alt="image" src="https://github.com/user-attachments/assets/16e0ed8e-0f2b-4c5f-b778-0c1a64c86f99" />
+
 # AI Business Consulting Agent
 
 A Python + Streamlit application that turns an ambiguous business problem into a structured strategy consulting work product using the OpenAI API.
