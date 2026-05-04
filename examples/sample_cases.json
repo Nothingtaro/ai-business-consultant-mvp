@@ -1,20 +1,47 @@
 [
   {
-    "name": "Premium SaaS Tier Launch",
-    "problem": "Should we launch a premium subscription tier for SMB customers?",
-    "budget": "$500k launch budget",
-    "geography": "United States",
-    "target_customers": "B2B SaaS companies with 20-250 employees",
-    "constraints": "Must launch within 90 days; no new engineering hires",
-    "expected_output": "A go/no-go recommendation with financial assumptions"
+    "name": "Delivery-Only Matcha Shop in Bangkok",
+    "business_problem": "Should we launch a delivery-only matcha shop in Bangkok focused on premium drinks and light snacks?",
+    "budget": "500,000 THB launch budget",
+    "geography": "Bangkok, Thailand",
+    "target_customers": "Urban office workers, university students, health-conscious consumers, and cafe delivery users aged 18-35",
+    "constraints": "Delivery-only model; no dine-in store; must validate demand within 90 days; budget must cover equipment, ingredients, packaging, marketing, platform fees, and initial working capital",
+    "expected_output": "A go/no-go recommendation with pilot plan, unit economics, break-even assumptions, and key risks"
   },
   {
-    "name": "Retail Market Entry",
-    "problem": "Should our specialty coffee brand enter the Bangkok retail market?",
-    "budget": "$250k for market entry testing",
-    "geography": "Bangkok, Thailand",
-    "target_customers": "Urban professionals and premium coffee consumers",
-    "constraints": "Use existing supply chain; avoid long-term leases during pilot",
-    "expected_output": "A pilot plan, investment logic, and recommendation"
+    "name": "Increase Insurance Revenue from Mobile App Funnel",
+    "business_problem": "How can we increase insurance revenue generated from the mobile app funnel without hurting user experience or policy quality?",
+    "budget": "3,000,000 THB for experimentation, analytics, and funnel improvements",
+    "geography": "Thailand",
+    "target_customers": "Existing mobile app users who are eligible for motor, health, travel, or personal accident insurance offers",
+    "constraints": "Must comply with insurance sales regulations; limited engineering capacity; no aggressive dark patterns; improvements should be testable within one quarter",
+    "expected_output": "A prioritized growth plan with funnel diagnostics, revenue assumptions, experiment roadmap, and expected financial impact"
+  },
+  {
+    "name": "AI Quality Control for Telesales Calls",
+    "business_problem": "Should we launch an AI quality control system that reviews telesales calls for compliance, sales quality, and coaching opportunities?",
+    "budget": "2,500,000 THB for MVP build, model evaluation, integration, and pilot operations",
+    "geography": "Thailand",
+    "target_customers": "Insurance, banking, telecom, and consumer finance telesales teams with high call volumes and compliance risk",
+    "constraints": "Must protect customer privacy; Thai language call transcription quality may vary; pilot must integrate with existing call recording systems; management needs measurable QA productivity gains",
+    "expected_output": "A launch recommendation with target segment, MVP scope, financial assumptions, implementation risks, and pilot success criteria"
+  },
+  {
+    "name": "Customer Segmentation for Car Insurance Renewal",
+    "business_problem": "How can we improve customer segmentation to increase car insurance renewal rates and reduce discount leakage?",
+    "budget": "1,500,000 THB for data preparation, modeling, campaign design, and testing",
+    "geography": "Thailand",
+    "target_customers": "Existing car insurance policyholders approaching renewal within the next 90 days",
+    "constraints": "Must use available customer, policy, claim, and interaction data; renewal campaigns must be operationally simple for agents; avoid unfair or non-compliant pricing treatment",
+    "expected_output": "A segmentation strategy with priority segments, renewal interventions, expected uplift, data requirements, and test design"
+  },
+  {
+    "name": "Data Analytics Service for SMEs",
+    "business_problem": "Should we build a data analytics service for SMEs that turns sales, marketing, and operations data into dashboards and decision support?",
+    "budget": "4,000,000 THB for product development, initial hiring, sales pilots, and customer onboarding",
+    "geography": "Thailand and Southeast Asia pilot markets",
+    "target_customers": "SMEs with 20-300 employees that use POS, ecommerce, CRM, or accounting systems but lack internal analytics teams",
+    "constraints": "Must reach product-market validation within six months; limited brand awareness; integration scope must stay narrow for MVP; pricing must be affordable for SMEs",
+    "expected_output": "A market entry recommendation with target niche, service package, pricing assumptions, delivery model, and break-even logic"
   }
 ]

@@ -26,6 +26,8 @@ This project demonstrates how an AI agent workflow can apply strategy consulting
 - Robust JSON parsing with helpful error messages
 - Sequential workflow that passes context between steps
 - Markdown export for the final consulting report
+- Lightweight evaluation tab with local JSON history
+- Local workflow logging with saved raw outputs for JSON parsing failures
 - `.env` based configuration with no hardcoded API keys
 
 ## Demo Workflow
@@ -41,7 +43,8 @@ This project demonstrates how an AI agent workflow can apply strategy consulting
    - Executive Memo
    - Deck Outline
    - Critic Review
-4. Download the final markdown report.
+4. Use the Evaluation tab to score output quality and save reviewer notes locally.
+5. Download the final markdown report.
 
 ## Architecture Overview
 
@@ -184,7 +187,7 @@ Sample business cases are available in:
 examples/sample_cases.json
 ```
 
-Open the file, choose a case, and paste the fields into the Streamlit form. The sample cases are intentionally plain JSON so they can also be reused later for tests or demos.
+Use the sample case selector in the Streamlit app to auto-fill the input form, or open the JSON file directly for tests and demos.
 
 ## Example Output Sections
 
@@ -209,6 +212,7 @@ The final markdown export includes:
 - Financial assumptions are directional and not a substitute for a validated financial model.
 - The app does not currently browse the web or verify market data.
 - There is no persistent project history or database.
+- Logs and evaluation history are local-only and not intended for multi-user deployments.
 - There is no offline/mock mode for running the full workflow without an API key.
 - Automated tests are not yet included.
 

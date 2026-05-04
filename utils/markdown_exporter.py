@@ -16,6 +16,7 @@ from core.schemas import (
 
 
 def build_markdown_report(report: FinalConsultingReport) -> str:
+    """Build the complete client-ready markdown consulting report."""
     sections = [
         "# AI Business Consulting Report",
         _executive_summary(report),
@@ -40,9 +41,17 @@ def build_full_report(report: FinalConsultingReport) -> str:
 
 def safe_filename(name: str = "consulting_report.md") -> str:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-    stem = re.sub(r"[^a-zA-Z0-9_-]+", "_", name.rsplit(".", 1)[0]).strip("_").lower()
-    extension = name.rsplit(".", 1)[-1] if "." in name else "md"
+    stem, extension = _split_filename(name)
+    stem = re.sub(r"[^a-zA-Z0-9_-]+", "_", stem).strip("_").lower() or "consulting_report"
+    extension = re.sub(r"[^a-zA-Z0-9]+", "", extension).lower() or "md"
     return f"{stem}_{timestamp}.{extension}"
+
+
+def _split_filename(name: str) -> tuple[str, str]:
+    if "." not in name:
+        return name, "md"
+    stem, extension = name.rsplit(".", 1)
+    return stem, extension or "md"
 
 
 def _executive_summary(report: FinalConsultingReport) -> str:
@@ -56,14 +65,14 @@ def _executive_summary(report: FinalConsultingReport) -> str:
     if memo:
         bullets.append(f"Recommendation: {memo.recommendation}")
     if critic:
-        bullets.append(f"Confidence: {critic.recommendation_confidence} - {critic.confidence_rationale}")
+        bullets.append(f"Critic score: {critic.overall_score}/5 - {critic.final_verdict}")
 
     return "## Executive Summary\n\n" + _bullets(bullets)
 
 
 def _decision_question(report: FinalConsultingReport) -> str:
     if not report.problem_framing:
-        return ""
+        return "## Decision Question\n\nNot provided."
     framing = report.problem_framing
     return (
         "## Decision Question\n\n"
@@ -89,7 +98,7 @@ def _business_context(business_input: BusinessInput) -> str:
 
 def _issue_tree(report: FinalConsultingReport) -> str:
     if not report.issue_tree:
-        return ""
+        return "## Issue Tree\n\nNot provided."
     tree = report.issue_tree
     branch_rows = [
         (branch.name, _join(branch.questions), _join(branch.sub_branches))
@@ -106,7 +115,7 @@ def _issue_tree(report: FinalConsultingReport) -> str:
 
 def _key_hypotheses(report: FinalConsultingReport) -> str:
     if not report.hypotheses:
-        return ""
+        return "## Key Hypotheses\n\nNot provided."
     rows = [
         (
             item.hypothesis,
@@ -125,7 +134,7 @@ def _key_hypotheses(report: FinalConsultingReport) -> str:
 
 def _analysis_plan(report: FinalConsultingReport) -> str:
     if not report.analysis_plan:
-        return ""
+        return "## Analysis Plan\n\nNot provided."
     rows = [
         (
             item.workstream,
@@ -148,7 +157,19 @@ def _analysis_plan(report: FinalConsultingReport) -> str:
 
 def _financial_assumptions(report: FinalConsultingReport) -> str:
     if not report.financial_assumptions:
-        return ""
+        return "## Financial Assumptions\n\nNot provided."
+    driver_rows = [
+        (
+            item.category,
+            item.driver,
+            item.worst_case_value,
+            item.base_case_value,
+            item.best_case_value,
+            item.rationale,
+            item.validation_source,
+        )
+        for item in report.financial_assumptions.driver_assumptions
+    ]
     rows = [
         (
             item.assumption,
@@ -160,9 +181,39 @@ def _financial_assumptions(report: FinalConsultingReport) -> str:
         )
         for item in report.financial_assumptions.assumptions
     ]
+    scenario_rows = [
+        (
+            item.scenario,
+            _format_number(item.price),
+            _format_number(item.volume),
+            _format_number(item.variable_cost_per_unit),
+            _format_number(item.fixed_cost),
+            _format_number(item.revenue),
+            _format_number(item.gross_margin, is_ratio=True),
+            _format_number(item.break_even_units),
+            _format_number(item.operating_profit),
+            item.notes,
+        )
+        for item in report.financial_assumptions.scenarios
+    ]
+    break_even = report.financial_assumptions.break_even_logic
+    break_even_text = "Not provided."
+    if break_even:
+        break_even_text = (
+            f"**Formula:** {break_even.formula}\n\n"
+            f"**Interpretation:** {break_even.interpretation}\n\n"
+            f"**Key constraint:** {break_even.key_constraint}"
+        )
     return (
         "## Financial Assumptions\n\n"
+        "### Driver Assumptions\n\n"
+        f"{_table(['Category', 'Driver', 'Worst Case', 'Base Case', 'Best Case', 'Rationale', 'Validation Source'], driver_rows)}\n\n"
+        "### Assumption Table\n\n"
         f"{_table(['Assumption', 'Base Case', 'Low Case', 'High Case', 'Rationale', 'Validation Source'], rows)}\n\n"
+        "### Scenario Calculations\n\n"
+        f"{_table(['Scenario', 'Price', 'Volume', 'Variable Cost / Unit', 'Fixed Cost', 'Revenue', 'Gross Margin', 'Break-Even Units', 'Operating Profit', 'Notes'], scenario_rows)}\n\n"
+        "### Break-Even Logic\n\n"
+        f"{break_even_text}\n\n"
         "### Financial Logic\n\n"
         f"{_bullets(report.financial_assumptions.simple_financial_logic)}\n\n"
         "### Sensitivities\n\n"
@@ -172,7 +223,7 @@ def _financial_assumptions(report: FinalConsultingReport) -> str:
 
 def _recommendation(report: FinalConsultingReport) -> str:
     if not report.executive_memo:
-        return ""
+        return "## Recommendation\n\nNot provided."
     memo = report.executive_memo
     return (
         "## Recommendation\n\n"
@@ -185,7 +236,7 @@ def _recommendation(report: FinalConsultingReport) -> str:
 
 def _risks(report: FinalConsultingReport) -> str:
     if not report.executive_memo:
-        return ""
+        return "## Risks\n\nNot provided."
     rows = [
         (risk.risk, risk.why_it_matters, risk.mitigation)
         for risk in report.executive_memo.risks_and_mitigations
@@ -195,13 +246,13 @@ def _risks(report: FinalConsultingReport) -> str:
 
 def _next_steps(report: FinalConsultingReport) -> str:
     if not report.executive_memo:
-        return ""
+        return "## Next Steps\n\nNot provided."
     return "## Next Steps\n\n" + _bullets(report.executive_memo.next_30_days)
 
 
 def _deck_outline(report: FinalConsultingReport) -> str:
     if not report.deck_outline:
-        return ""
+        return "## 10-Slide Pitch Deck Outline\n\nNot provided."
     rows = [
         (
             str(slide.slide_number),
@@ -220,21 +271,20 @@ def _deck_outline(report: FinalConsultingReport) -> str:
 
 def _critic_review(report: FinalConsultingReport) -> str:
     if not report.critic:
-        return ""
+        return "## Critic Review\n\nNot provided."
     critic = report.critic
     return (
         "## Critic Review\n\n"
-        "### Strongest Parts\n\n"
-        f"{_bullets(critic.strongest_parts)}\n\n"
-        "### Weakest Assumptions\n\n"
-        f"{_bullets(critic.weakest_assumptions)}\n\n"
-        "### Missing Analyses\n\n"
-        f"{_bullets(critic.missing_analyses)}\n\n"
-        "### Red-Team Objections\n\n"
-        f"{_bullets(critic.red_team_objections)}\n\n"
-        f"**Recommendation confidence:** {critic.recommendation_confidence}\n\n"
-        f"**Confidence rationale:** {critic.confidence_rationale}\n\n"
-        f"**Improved recommendation:** {critic.improved_recommendation}"
+        f"**Overall score:** {critic.overall_score}/5\n\n"
+        "### Strengths\n\n"
+        f"{_bullets(critic.strengths)}\n\n"
+        "### Weaknesses\n\n"
+        f"{_bullets(critic.weaknesses)}\n\n"
+        "### Critical Gaps\n\n"
+        f"{_bullets(critic.critical_gaps)}\n\n"
+        "### Recommended Improvements\n\n"
+        f"{_bullets(critic.recommended_improvements)}\n\n"
+        f"**Final verdict:** {critic.final_verdict}"
     )
 
 
@@ -259,3 +309,13 @@ def _join(items: list[str]) -> str:
 
 def _clean(value: str) -> str:
     return str(value).replace("\n", " ").replace("|", "\\|").strip()
+
+
+def _format_number(value: float | None, is_ratio: bool = False) -> str:
+    if value is None:
+        return "Not provided."
+    if is_ratio:
+        return f"{value * 100:.1f}%"
+    if float(value).is_integer():
+        return f"{value:,.0f}"
+    return f"{value:,.2f}"

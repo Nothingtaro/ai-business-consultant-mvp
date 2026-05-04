@@ -1,4 +1,4 @@
-Create a basic financial assumption table for the business decision.
+Create a simple but practical financial assumption model for the business decision.
 
 Business problem: {business_problem}
 Budget: {budget}
@@ -10,8 +10,13 @@ Expected output: {expected_output}
 Prior workflow outputs:
 {prior_work}
 
-Create a structured output with:
-- Assumptions for revenue drivers, cost drivers, budget use, timing, and break-even logic where relevant.
-- Base case, low case, high case, rationale, and validation source for each assumption.
-- Simple financial logic expressed in words, not code.
+Create management-level JSON with:
+- A concise assumption table covering revenue drivers, price, volume, variable cost, fixed cost, gross margin, break-even logic, and best/base/worst cases.
+- Driver assumptions that separate revenue drivers, price, volume, variable cost, fixed cost, and gross margin.
+- Three scenario rows named "Worst case", "Base case", and "Best case".
+- Numeric scenario inputs where practical: price, volume, variable_cost_per_unit, and fixed_cost. Use plain numbers only, without currency symbols or commas, so Python can calculate revenue, costs, margin, break-even units, and operating profit.
+- If a metric is not applicable, use null for the numeric field and explain briefly in notes.
+- Break-even logic with the formula, interpretation, and key constraint.
 - The 3-5 assumptions most likely to change the recommendation.
+
+Keep the model simple. Prefer directional estimates that are explicit and reviewable over vague narrative.

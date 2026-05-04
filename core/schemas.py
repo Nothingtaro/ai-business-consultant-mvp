@@ -59,6 +59,38 @@ class FinancialAssumptionItem(BaseModel):
     validation_source: str
 
 
+class FinancialDriverAssumption(BaseModel):
+    driver: str
+    category: str
+    base_case_value: str
+    worst_case_value: str
+    best_case_value: str
+    rationale: str
+    validation_source: str
+
+
+class FinancialScenario(BaseModel):
+    scenario: str
+    price: float | None = None
+    volume: float | None = None
+    variable_cost_per_unit: float | None = None
+    fixed_cost: float | None = None
+    revenue: float | None = None
+    variable_cost: float | None = None
+    gross_profit: float | None = None
+    gross_margin: float | None = None
+    contribution_margin_per_unit: float | None = None
+    break_even_units: float | None = None
+    operating_profit: float | None = None
+    notes: str = ""
+
+
+class BreakEvenLogic(BaseModel):
+    formula: str = "fixed_cost / (price - variable_cost_per_unit)"
+    interpretation: str
+    key_constraint: str
+
+
 class RiskMitigation(BaseModel):
     risk: str
     why_it_matters: str
@@ -99,6 +131,9 @@ class AnalysisPlanOutput(BaseModel):
 
 class FinancialAssumptionOutput(BaseModel):
     assumptions: list[FinancialAssumptionItem] = Field(default_factory=list)
+    driver_assumptions: list[FinancialDriverAssumption] = Field(default_factory=list)
+    scenarios: list[FinancialScenario] = Field(default_factory=list)
+    break_even_logic: BreakEvenLogic | None = None
     simple_financial_logic: list[str] = Field(default_factory=list)
     sensitivities: list[str] = Field(default_factory=list)
 
@@ -116,13 +151,12 @@ class DeckOutlineOutput(BaseModel):
 
 
 class CriticOutput(BaseModel):
-    strongest_parts: list[str] = Field(default_factory=list)
-    weakest_assumptions: list[str] = Field(default_factory=list)
-    missing_analyses: list[str] = Field(default_factory=list)
-    red_team_objections: list[str] = Field(default_factory=list)
-    recommendation_confidence: str
-    confidence_rationale: str
-    improved_recommendation: str
+    overall_score: int = Field(ge=1, le=5)
+    strengths: list[str] = Field(default_factory=list)
+    weaknesses: list[str] = Field(default_factory=list)
+    critical_gaps: list[str] = Field(default_factory=list)
+    recommended_improvements: list[str] = Field(default_factory=list)
+    final_verdict: str
 
 
 class AgentResult(BaseModel):

@@ -8,6 +8,7 @@ from utils.prompt_loader import load_prompt_template, render_prompt
 
 
 def run(business_input: BusinessProblemInput, prior_results: list[AgentResult], config: AppConfig) -> AgentResult:
+    """Run the senior-manager critic review and enforce its structured JSON contract."""
     system_prompt = load_prompt_template(config.prompts_dir, "system")
     template = load_prompt_template(config.prompts_dir, "critic")
     prompt = render_prompt(template, business_input, prior_results, CriticOutput)

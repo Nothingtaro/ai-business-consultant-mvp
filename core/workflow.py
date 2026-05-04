@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Callable, Generator
 from dataclasses import dataclass
+from datetime import datetime
+from time import perf_counter
 
 from agents import (
     analysis_planner,
@@ -13,6 +15,8 @@ from agents import (
     memo_writer,
     problem_framer,
 )
+from utils.app_logging import get_app_logger, save_failed_llm_output
+from utils.json_parser import JsonParsingError
 from core.config import AppConfig
 from core.schemas import (
     AgentResult,
@@ -68,7 +72,7 @@ def run_consulting_workflow(
     for index, step in enumerate(WORKFLOW_STEPS, start=1):
         # Prior outputs are intentionally passed forward so every step can build on the work
         # already completed instead of re-solving the original business problem in isolation.
-        result = step.runner(input_data, intermediate_results, app_config)
+        result = _run_step_with_logging(step, input_data, intermediate_results, app_config)
         intermediate_results.append(result)
 
         if progress_callback:
@@ -89,7 +93,7 @@ class ConsultingWorkflow:
         results: list[AgentResult] = []
 
         for step in self.steps:
-            result = step.runner(business_input, results, self.config)
+            result = _run_step_with_logging(step, business_input, results, self.config)
             results.append(result)
             yield result
 
@@ -115,6 +119,70 @@ def _build_final_report(
         critic=_as_model(result_map, "critic", CriticOutput),
         intermediate_results=results,
     )
+
+
+def _run_step_with_logging(
+    step: WorkflowStep,
+    input_data: BusinessProblemInput,
+    prior_results: list[AgentResult],
+    config: AppConfig,
+) -> AgentResult:
+    logger = get_app_logger()
+    start_time = datetime.now()
+    timer = perf_counter()
+
+    logger.info(
+        "workflow_step_start step_key=%s step_title=%r start_time=%s prior_results=%s model=%s",
+        step.key,
+        step.title,
+        start_time.isoformat(timespec="seconds"),
+        len(prior_results),
+        config.model,
+    )
+
+    try:
+        result = step.runner(input_data, prior_results, config)
+    except JsonParsingError as exc:
+        end_time = datetime.now()
+        duration_seconds = round(perf_counter() - timer, 2)
+        raw_output_path = save_failed_llm_output(step.key, exc.raw_output)
+        setattr(exc, "raw_output_path", str(raw_output_path))
+        logger.error(
+            "workflow_step_end step_key=%s step_title=%r status=json_parse_failed start_time=%s end_time=%s duration_seconds=%s raw_output_path=%s error_type=%s",
+            step.key,
+            step.title,
+            start_time.isoformat(timespec="seconds"),
+            end_time.isoformat(timespec="seconds"),
+            duration_seconds,
+            raw_output_path,
+            type(exc).__name__,
+        )
+        raise
+    except Exception as exc:
+        end_time = datetime.now()
+        duration_seconds = round(perf_counter() - timer, 2)
+        logger.exception(
+            "workflow_step_end step_key=%s step_title=%r status=failed start_time=%s end_time=%s duration_seconds=%s error_type=%s",
+            step.key,
+            step.title,
+            start_time.isoformat(timespec="seconds"),
+            end_time.isoformat(timespec="seconds"),
+            duration_seconds,
+            type(exc).__name__,
+        )
+        raise
+
+    end_time = datetime.now()
+    duration_seconds = round(perf_counter() - timer, 2)
+    logger.info(
+        "workflow_step_end step_key=%s step_title=%r status=success start_time=%s end_time=%s duration_seconds=%s",
+        step.key,
+        step.title,
+        start_time.isoformat(timespec="seconds"),
+        end_time.isoformat(timespec="seconds"),
+        duration_seconds,
+    )
+    return result
 
 
 def _as_model(
