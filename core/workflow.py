@@ -19,8 +19,10 @@ from utils.app_logging import get_app_logger, save_failed_llm_output
 from utils.json_parser import JsonParsingError
 from core.config import AppConfig
 from core.schemas import (
+    ActionPlanOutput,
     AgentResult,
     AnalysisPlanOutput,
+    AssumptionRegisterItem,
     BusinessProblemInput,
     CriticOutput,
     DeckOutlineOutput,
@@ -30,6 +32,7 @@ from core.schemas import (
     HypothesisOutput,
     IssueTreeOutput,
     ProblemFramingOutput,
+    StrategicOption,
 )
 
 
@@ -106,19 +109,208 @@ def _build_final_report(
     results: list[AgentResult],
 ) -> FinalConsultingReport:
     result_map = {result.key: result for result in results}
+    problem_framing = _as_model(result_map, "problem_framing", ProblemFramingOutput)
+    issue_tree = _as_model(result_map, "issue_tree", IssueTreeOutput)
+    hypotheses = _as_model(result_map, "hypotheses", HypothesisOutput)
+    analysis_plan = _as_model(result_map, "analysis_plan", AnalysisPlanOutput)
+    financial_assumptions = _as_model(result_map, "financial_assumptions", FinancialAssumptionOutput)
+    executive_memo = _as_model(result_map, "executive_memo", ExecutiveMemoOutput)
+    deck_outline = _as_model(result_map, "deck_outline", DeckOutlineOutput)
+    critic = _as_model(result_map, "critic", CriticOutput)
 
     return FinalConsultingReport(
         business_input=business_input,
-        problem_framing=_as_model(result_map, "problem_framing", ProblemFramingOutput),
-        issue_tree=_as_model(result_map, "issue_tree", IssueTreeOutput),
-        hypotheses=_as_model(result_map, "hypotheses", HypothesisOutput),
-        analysis_plan=_as_model(result_map, "analysis_plan", AnalysisPlanOutput),
-        financial_assumptions=_as_model(result_map, "financial_assumptions", FinancialAssumptionOutput),
-        executive_memo=_as_model(result_map, "executive_memo", ExecutiveMemoOutput),
-        deck_outline=_as_model(result_map, "deck_outline", DeckOutlineOutput),
-        critic=_as_model(result_map, "critic", CriticOutput),
+        situation_context=_build_situation_context(business_input, problem_framing),
+        key_business_objective=_build_key_business_objective(business_input, problem_framing),
+        market_customer_competitor_considerations=_build_market_considerations(
+            business_input,
+            issue_tree,
+            executive_memo,
+        ),
+        strategic_options=_build_strategic_options(executive_memo),
+        assumption_register=_build_assumption_register(financial_assumptions, hypotheses),
+        data_gaps=_build_data_gaps(problem_framing, analysis_plan, critic),
+        action_plan=_build_action_plan(executive_memo, analysis_plan),
+        problem_framing=problem_framing,
+        issue_tree=issue_tree,
+        hypotheses=hypotheses,
+        analysis_plan=analysis_plan,
+        financial_assumptions=financial_assumptions,
+        executive_memo=executive_memo,
+        deck_outline=deck_outline,
+        critic=critic,
         intermediate_results=results,
     )
+
+
+def _build_situation_context(
+    business_input: BusinessProblemInput,
+    problem_framing: ProblemFramingOutput | None,
+) -> list[str]:
+    context = [
+        f"Business problem: {business_input.problem}",
+        f"Geography: {business_input.geography}",
+        f"Target customers: {business_input.target_customers}",
+        f"Budget: {business_input.budget}",
+        f"Constraints: {business_input.constraints}",
+    ]
+    if problem_framing:
+        context.extend(problem_framing.context_summary)
+    return _unique(context)
+
+
+def _build_key_business_objective(
+    business_input: BusinessProblemInput,
+    problem_framing: ProblemFramingOutput | None,
+) -> str:
+    if business_input.expected_output and business_input.expected_output != "Not specified":
+        return business_input.expected_output
+    if problem_framing and problem_framing.success_criteria:
+        return problem_framing.success_criteria[0]
+    return "Clarify the decision and identify the highest-value path forward."
+
+
+def _build_market_considerations(
+    business_input: BusinessProblemInput,
+    issue_tree: IssueTreeOutput | None,
+    executive_memo: ExecutiveMemoOutput | None,
+) -> list[str]:
+    considerations = []
+    if executive_memo and executive_memo.market_customer_competitor_considerations:
+        considerations.extend(executive_memo.market_customer_competitor_considerations)
+    considerations.extend(
+        [
+            f"Market / geography: {business_input.geography}",
+            f"Customer segment: {business_input.target_customers}",
+        ]
+    )
+    if issue_tree:
+        market_branches = [
+            branch.name
+            for branch in issue_tree.branches
+            if any(keyword in branch.name.lower() for keyword in ("market", "customer", "competitor", "demand"))
+        ]
+        considerations.extend(f"High-priority market/customer branch: {branch}" for branch in market_branches)
+    return _unique(considerations)
+
+
+def _build_strategic_options(executive_memo: ExecutiveMemoOutput | None) -> list[StrategicOption]:
+    if executive_memo and executive_memo.strategic_options:
+        return executive_memo.strategic_options
+    if not executive_memo:
+        return []
+    return [
+        StrategicOption(
+            option="Proceed with recommended path",
+            description=executive_memo.recommendation,
+            upside="Captures the opportunity identified in the analysis.",
+            downside="Depends on validating the core assumptions before scaling.",
+            decision_implication="Use the recommendation as the base case for management decision-making.",
+        ),
+        StrategicOption(
+            option="Run a constrained pilot first",
+            description="Validate demand, economics, and operational feasibility before committing full resources.",
+            upside="Reduces downside risk and improves evidence quality.",
+            downside="Delays full-scale impact and may understate long-term potential.",
+            decision_implication="Best fit if confidence is moderate or data gaps remain material.",
+        ),
+        StrategicOption(
+            option="Defer major investment",
+            description="Pause significant spend until critical data gaps are closed.",
+            upside="Avoids committing capital against weak evidence.",
+            downside="May miss timing advantages or competitor movement.",
+            decision_implication="Best fit if the critic review or financial assumptions show low confidence.",
+        ),
+    ]
+
+
+def _build_assumption_register(
+    financial_assumptions: FinancialAssumptionOutput | None,
+    hypotheses: HypothesisOutput | None,
+) -> list[AssumptionRegisterItem]:
+    register: list[AssumptionRegisterItem] = []
+    if financial_assumptions:
+        register.extend(
+            AssumptionRegisterItem(
+                assumption=item.assumption,
+                source="Financial assumptions",
+                importance=item.rationale,
+                validation_needed=item.validation_source,
+            )
+            for item in financial_assumptions.assumptions
+        )
+        register.extend(
+            AssumptionRegisterItem(
+                assumption=f"{item.category}: {item.driver}",
+                source="Financial driver assumptions",
+                importance=item.rationale,
+                validation_needed=item.validation_source,
+            )
+            for item in financial_assumptions.driver_assumptions
+        )
+    if hypotheses:
+        register.extend(
+            AssumptionRegisterItem(
+                assumption=item.hypothesis,
+                source="Key hypotheses",
+                importance=item.why_it_matters,
+                validation_needed=item.evidence_needed,
+            )
+            for item in hypotheses.hypotheses
+        )
+    return register
+
+
+def _build_data_gaps(
+    problem_framing: ProblemFramingOutput | None,
+    analysis_plan: AnalysisPlanOutput | None,
+    critic: CriticOutput | None,
+) -> list[str]:
+    gaps: list[str] = []
+    if problem_framing:
+        gaps.extend(problem_framing.key_unknowns)
+    if analysis_plan:
+        gaps.extend(item.data_needed for item in analysis_plan.plan)
+    if critic:
+        gaps.extend(critic.critical_gaps)
+    return _unique(gaps)
+
+
+def _build_action_plan(
+    executive_memo: ExecutiveMemoOutput | None,
+    analysis_plan: AnalysisPlanOutput | None,
+) -> ActionPlanOutput:
+    next_30_days = executive_memo.next_30_days if executive_memo else []
+    next_60_days = executive_memo.next_60_days if executive_memo else []
+    next_90_days = executive_memo.next_90_days if executive_memo else []
+
+    if analysis_plan and not next_60_days:
+        next_60_days = [
+            f"Complete {item.workstream}: {item.analysis}"
+            for item in analysis_plan.plan[:3]
+        ]
+    if analysis_plan and not next_90_days:
+        next_90_days = [
+            f"Use evidence from {item.workstream} to refine the recommendation."
+            for item in analysis_plan.plan[:3]
+        ]
+    return ActionPlanOutput(
+        next_30_days=next_30_days,
+        next_60_days=next_60_days,
+        next_90_days=next_90_days,
+    )
+
+
+def _unique(items: list[str]) -> list[str]:
+    seen = set()
+    unique_items = []
+    for item in items:
+        clean_item = str(item).strip()
+        if not clean_item or clean_item in seen:
+            continue
+        seen.add(clean_item)
+        unique_items.append(clean_item)
+    return unique_items
 
 
 def _run_step_with_logging(

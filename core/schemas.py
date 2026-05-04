@@ -97,6 +97,27 @@ class RiskMitigation(BaseModel):
     mitigation: str
 
 
+class StrategicOption(BaseModel):
+    option: str
+    description: str
+    upside: str
+    downside: str
+    decision_implication: str
+
+
+class AssumptionRegisterItem(BaseModel):
+    assumption: str
+    source: str
+    importance: str
+    validation_needed: str
+
+
+class ActionPlanOutput(BaseModel):
+    next_30_days: list[str] = Field(default_factory=list)
+    next_60_days: list[str] = Field(default_factory=list)
+    next_90_days: list[str] = Field(default_factory=list)
+
+
 class DeckSlide(BaseModel):
     slide_number: int
     title: str
@@ -142,8 +163,12 @@ class ExecutiveMemoOutput(BaseModel):
     recommendation: str
     rationale: list[str] = Field(default_factory=list)
     financial_implications: str
+    market_customer_competitor_considerations: list[str] = Field(default_factory=list)
+    strategic_options: list[StrategicOption] = Field(default_factory=list)
     risks_and_mitigations: list[RiskMitigation] = Field(default_factory=list)
     next_30_days: list[str] = Field(default_factory=list)
+    next_60_days: list[str] = Field(default_factory=list)
+    next_90_days: list[str] = Field(default_factory=list)
 
 
 class DeckOutlineOutput(BaseModel):
@@ -171,6 +196,13 @@ class AgentResult(BaseModel):
 
 class FinalConsultingReport(BaseModel):
     business_input: BusinessInput
+    situation_context: list[str] = Field(default_factory=list)
+    key_business_objective: str = ""
+    market_customer_competitor_considerations: list[str] = Field(default_factory=list)
+    strategic_options: list[StrategicOption] = Field(default_factory=list)
+    assumption_register: list[AssumptionRegisterItem] = Field(default_factory=list)
+    data_gaps: list[str] = Field(default_factory=list)
+    action_plan: ActionPlanOutput = Field(default_factory=ActionPlanOutput)
     problem_framing: ProblemFramingOutput | None = None
     issue_tree: IssueTreeOutput | None = None
     hypotheses: HypothesisOutput | None = None

@@ -23,6 +23,9 @@ dist/
 
 # Streamlit local state
 .streamlit/
+!.streamlit/
+!.streamlit/config.toml
+.streamlit/secrets.toml
 
 # Logs and local run output
 logs/
@@ -30,6 +33,8 @@ logs/
 outputs/
 eval_outputs/
 local_outputs/
+*.sqlite
+*.db
 
 # OS/editor noise
 .DS_Store

@@ -5,7 +5,6 @@ from datetime import datetime
 
 from core.schemas import (
     AnalysisPlanItem,
-    BusinessInput,
     DeckSlide,
     FinalConsultingReport,
     FinancialAssumptionItem,
@@ -21,14 +20,21 @@ def build_markdown_report(report: FinalConsultingReport) -> str:
         "# AI Business Consulting Report",
         _executive_summary(report),
         _decision_question(report),
-        _business_context(report.business_input),
+        _situation_context(report),
+        _key_business_objective(report),
         _issue_tree(report),
         _key_hypotheses(report),
         _analysis_plan(report),
-        _financial_assumptions(report),
+        _market_customer_competitor_considerations(report),
+        _strategic_options(report),
         _recommendation(report),
-        _risks(report),
-        _next_steps(report),
+        _financial_assumptions(report),
+        _scenario_analysis(report),
+        _key_risks(report),
+        _mitigation_plan(report),
+        _assumption_register(report),
+        _data_gaps(report),
+        _action_plan(report),
         _deck_outline(report),
         _critic_review(report),
     ]
@@ -84,16 +90,25 @@ def _decision_question(report: FinalConsultingReport) -> str:
     )
 
 
-def _business_context(business_input: BusinessInput) -> str:
+def _situation_context(report: FinalConsultingReport) -> str:
     rows = [
-        ("Business Problem", business_input.problem),
-        ("Budget", business_input.budget),
-        ("Geography", business_input.geography),
-        ("Target Customers", business_input.target_customers),
-        ("Constraints", business_input.constraints),
-        ("Expected Output", business_input.expected_output),
+        ("Business Problem", report.business_input.problem),
+        ("Budget", report.business_input.budget),
+        ("Geography", report.business_input.geography),
+        ("Target Customers", report.business_input.target_customers),
+        ("Constraints", report.business_input.constraints),
+        ("Expected Output", report.business_input.expected_output),
     ]
-    return "## Business Context\n\n" + _table(["Field", "Input"], rows)
+    return (
+        "## Situation / Context\n\n"
+        f"{_table(['Field', 'Input'], rows)}\n\n"
+        "### Context Summary\n\n"
+        f"{_bullets(report.situation_context)}"
+    )
+
+
+def _key_business_objective(report: FinalConsultingReport) -> str:
+    return "## Key Business Objective\n\n" + (report.key_business_objective or "Not provided.")
 
 
 def _issue_tree(report: FinalConsultingReport) -> str:
@@ -155,6 +170,30 @@ def _analysis_plan(report: FinalConsultingReport) -> str:
     )
 
 
+def _market_customer_competitor_considerations(report: FinalConsultingReport) -> str:
+    return (
+        "## Market / Customer / Competitor Considerations\n\n"
+        f"{_bullets(report.market_customer_competitor_considerations)}"
+    )
+
+
+def _strategic_options(report: FinalConsultingReport) -> str:
+    rows = [
+        (
+            item.option,
+            item.description,
+            item.upside,
+            item.downside,
+            item.decision_implication,
+        )
+        for item in report.strategic_options
+    ]
+    return "## Strategic Options\n\n" + _table(
+        ["Option", "Description", "Upside", "Downside", "Decision Implication"],
+        rows,
+    )
+
+
 def _financial_assumptions(report: FinalConsultingReport) -> str:
     if not report.financial_assumptions:
         return "## Financial Assumptions\n\nNot provided."
@@ -181,21 +220,6 @@ def _financial_assumptions(report: FinalConsultingReport) -> str:
         )
         for item in report.financial_assumptions.assumptions
     ]
-    scenario_rows = [
-        (
-            item.scenario,
-            _format_number(item.price),
-            _format_number(item.volume),
-            _format_number(item.variable_cost_per_unit),
-            _format_number(item.fixed_cost),
-            _format_number(item.revenue),
-            _format_number(item.gross_margin, is_ratio=True),
-            _format_number(item.break_even_units),
-            _format_number(item.operating_profit),
-            item.notes,
-        )
-        for item in report.financial_assumptions.scenarios
-    ]
     break_even = report.financial_assumptions.break_even_logic
     break_even_text = "Not provided."
     if break_even:
@@ -210,14 +234,51 @@ def _financial_assumptions(report: FinalConsultingReport) -> str:
         f"{_table(['Category', 'Driver', 'Worst Case', 'Base Case', 'Best Case', 'Rationale', 'Validation Source'], driver_rows)}\n\n"
         "### Assumption Table\n\n"
         f"{_table(['Assumption', 'Base Case', 'Low Case', 'High Case', 'Rationale', 'Validation Source'], rows)}\n\n"
-        "### Scenario Calculations\n\n"
-        f"{_table(['Scenario', 'Price', 'Volume', 'Variable Cost / Unit', 'Fixed Cost', 'Revenue', 'Gross Margin', 'Break-Even Units', 'Operating Profit', 'Notes'], scenario_rows)}\n\n"
         "### Break-Even Logic\n\n"
         f"{break_even_text}\n\n"
         "### Financial Logic\n\n"
         f"{_bullets(report.financial_assumptions.simple_financial_logic)}\n\n"
         "### Sensitivities\n\n"
         f"{_bullets(report.financial_assumptions.sensitivities)}"
+    )
+
+
+def _scenario_analysis(report: FinalConsultingReport) -> str:
+    if not report.financial_assumptions:
+        return "## Scenario Analysis\n\nNot provided."
+    scenario_rows = [
+        (
+            item.scenario,
+            _format_number(item.price),
+            _format_number(item.volume),
+            _format_number(item.variable_cost_per_unit),
+            _format_number(item.fixed_cost),
+            _format_number(item.revenue),
+            _format_number(item.variable_cost),
+            _format_number(item.gross_profit),
+            _format_number(item.gross_margin, is_ratio=True),
+            _format_number(item.break_even_units),
+            _format_number(item.operating_profit),
+            item.notes,
+        )
+        for item in report.financial_assumptions.scenarios
+    ]
+    return "## Scenario Analysis\n\n" + _table(
+        [
+            "Scenario",
+            "Price",
+            "Volume",
+            "Variable Cost / Unit",
+            "Fixed Cost",
+            "Revenue",
+            "Variable Cost",
+            "Gross Profit",
+            "Gross Margin",
+            "Break-Even Units",
+            "Operating Profit",
+            "Notes",
+        ],
+        scenario_rows,
     )
 
 
@@ -234,20 +295,56 @@ def _recommendation(report: FinalConsultingReport) -> str:
     )
 
 
-def _risks(report: FinalConsultingReport) -> str:
+def _key_risks(report: FinalConsultingReport) -> str:
     if not report.executive_memo:
-        return "## Risks\n\nNot provided."
+        return "## Key Risks\n\nNot provided."
     rows = [
-        (risk.risk, risk.why_it_matters, risk.mitigation)
+        (risk.risk, risk.why_it_matters)
         for risk in report.executive_memo.risks_and_mitigations
     ]
-    return "## Risks\n\n" + _table(["Risk", "Why It Matters", "Mitigation"], rows)
+    return "## Key Risks\n\n" + _table(["Risk", "Why It Matters"], rows)
 
 
-def _next_steps(report: FinalConsultingReport) -> str:
+def _mitigation_plan(report: FinalConsultingReport) -> str:
     if not report.executive_memo:
-        return "## Next Steps\n\nNot provided."
-    return "## Next Steps\n\n" + _bullets(report.executive_memo.next_30_days)
+        return "## Mitigation Plan\n\nNot provided."
+    rows = [
+        (risk.risk, risk.mitigation)
+        for risk in report.executive_memo.risks_and_mitigations
+    ]
+    return "## Mitigation Plan\n\n" + _table(["Risk", "Mitigation"], rows)
+
+
+def _assumption_register(report: FinalConsultingReport) -> str:
+    rows = [
+        (
+            item.assumption,
+            item.source,
+            item.importance,
+            item.validation_needed,
+        )
+        for item in report.assumption_register
+    ]
+    return "## Assumption Register\n\n" + _table(
+        ["Assumption", "Source", "Importance", "Validation Needed"],
+        rows,
+    )
+
+
+def _data_gaps(report: FinalConsultingReport) -> str:
+    return "## Data Gaps\n\n" + _bullets(report.data_gaps)
+
+
+def _action_plan(report: FinalConsultingReport) -> str:
+    return (
+        "## Next 30 / 60 / 90 Day Action Plan\n\n"
+        "### Next 30 Days\n\n"
+        f"{_bullets(report.action_plan.next_30_days)}\n\n"
+        "### Next 60 Days\n\n"
+        f"{_bullets(report.action_plan.next_60_days)}\n\n"
+        "### Next 90 Days\n\n"
+        f"{_bullets(report.action_plan.next_90_days)}"
+    )
 
 
 def _deck_outline(report: FinalConsultingReport) -> str:

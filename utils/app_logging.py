@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+import tempfile
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -32,8 +33,6 @@ def redact_sensitive(text: str) -> str:
 
 
 def get_app_logger() -> logging.Logger:
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-
     logger = logging.getLogger("ai_business_consultant")
     logger.setLevel(logging.INFO)
     logger.propagate = False
@@ -41,21 +40,36 @@ def get_app_logger() -> logging.Logger:
     if logger.handlers:
         return logger
 
-    handler = RotatingFileHandler(
-        APP_LOG_PATH,
-        maxBytes=1_000_000,
-        backupCount=5,
-        encoding="utf-8",
-    )
+    try:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        handler: logging.Handler = RotatingFileHandler(
+            APP_LOG_PATH,
+            maxBytes=1_000_000,
+            backupCount=5,
+            encoding="utf-8",
+        )
+    except OSError:
+        fallback_path = Path(tempfile.gettempdir()) / "ai_business_consultant.log"
+        handler = RotatingFileHandler(
+            fallback_path,
+            maxBytes=1_000_000,
+            backupCount=2,
+            encoding="utf-8",
+        )
     handler.setFormatter(RedactingFormatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
     logger.addHandler(handler)
     return logger
 
 
 def save_failed_llm_output(step_key: str, raw_output: str) -> Path:
-    FAILED_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    output_dir = FAILED_OUTPUT_DIR
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        output_dir = Path(tempfile.gettempdir()) / "failed_llm_outputs"
+        output_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     safe_step = "".join(char if char.isalnum() or char in ("_", "-") else "_" for char in step_key)
-    path = FAILED_OUTPUT_DIR / f"{timestamp}_{safe_step}.txt"
+    path = output_dir / f"{timestamp}_{safe_step}.txt"
     path.write_text(redact_sensitive(raw_output or "<empty output>"), encoding="utf-8")
     return path
