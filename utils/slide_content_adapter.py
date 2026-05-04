@@ -35,6 +35,7 @@ class DeckContent:
 
 def adapt_report_for_slides(report: FinalConsultingReport) -> DeckContent:
     appendix: list[SlideContent] = []
+    _append_saved_analysis_results(appendix, report)
     slides = [
         _title_content(report),
         _section_divider_content(report),
@@ -42,6 +43,7 @@ def adapt_report_for_slides(report: FinalConsultingReport) -> DeckContent:
         _decision_context_content(report, appendix),
         _issue_tree_content(report, appendix),
         _hypotheses_content(report, appendix),
+        _analytics_plan_content(report, appendix),
         _options_content(report, appendix),
         _recommendation_content(report),
         _financials_content(report, appendix),
@@ -52,6 +54,23 @@ def adapt_report_for_slides(report: FinalConsultingReport) -> DeckContent:
     ]
     warnings = qa_slide_content(slides, appendix)
     return DeckContent(slides=slides, appendix=appendix, warnings=warnings)
+
+
+def _append_saved_analysis_results(appendix: list[SlideContent], report: FinalConsultingReport) -> None:
+    if not report.data_analysis_results:
+        return
+    bullets = [
+        _shorten(f"{result.title}: {result.summary}", 150)
+        for result in report.data_analysis_results[:6]
+    ]
+    appendix.append(
+        SlideContent(
+            title="Saved Dataset Analysis Results",
+            subtitle="Appendix",
+            key_message="Predefined pandas analyses run on the uploaded dataset.",
+            payload={"bullets": bullets},
+        )
+    )
 
 
 def qa_slide_content(slides: list[SlideContent], appendix: list[SlideContent] | None = None) -> list[str]:
@@ -75,7 +94,8 @@ def qa_slide_content(slides: list[SlideContent], appendix: list[SlideContent] | 
                     if isinstance(item, str) and len(item) > MAX_TEXT_CHARS + 25:
                         warnings.append(f"Slide '{slide.title}' has a long bullet in '{key}'.")
             if isinstance(value, SlideTable):
-                if len(value.headers) > 4:
+                max_columns = 5 if "Storyboard" in slide.title else 4
+                if len(value.headers) > max_columns:
                     warnings.append(f"Slide '{slide.title}' table has {len(value.headers)} columns.")
                 row_limit = 10 if "Storyboard" in slide.title else MAX_TABLE_ROWS
                 if len(value.rows) > row_limit:
@@ -85,8 +105,8 @@ def qa_slide_content(slides: list[SlideContent], appendix: list[SlideContent] | 
 
 def _title_content(report: FinalConsultingReport) -> SlideContent:
     return SlideContent(
-        title="AI Business Consulting Report",
-        subtitle="Executive AI Strategy Deck",
+        title="AI Consulting OS Strategy Work Product",
+        subtitle="First-Pass Executive Strategy Deck",
         key_message=_shorten(report.business_input.problem, 170),
         payload={
             "problem": _shorten(report.business_input.problem, 220),
@@ -102,9 +122,9 @@ def _section_divider_content(report: FinalConsultingReport) -> SlideContent:
     decision = report.problem_framing.decision_question if report.problem_framing else report.business_input.problem
     return SlideContent(
         title="Strategy Diagnosis",
-        subtitle="From business question to executive decision",
+        subtitle="From business question to first-pass executive view",
         key_message=_shorten(decision, 180),
-        payload={"labels": ["Frame", "Analyze", "Decide", "Mobilize"]},
+        payload={"labels": ["Frame", "Analyze", "Synthesize", "Critique"]},
     )
 
 
@@ -118,7 +138,7 @@ def _executive_summary_content(report: FinalConsultingReport) -> SlideContent:
     ]
     return SlideContent(
         title="Executive Summary",
-        subtitle="Decision-ready synthesis",
+        subtitle="First-pass synthesis for management review",
         key_message=recommendation,
         payload={"cards": [(title, _shorten(body, 155)) for title, body in cards]},
     )
@@ -191,6 +211,31 @@ def _hypotheses_content(report: FinalConsultingReport, appendix: list[SlideConte
     )
 
 
+def _analytics_plan_content(report: FinalConsultingReport, appendix: list[SlideContent]) -> SlideContent:
+    if not report.analytics_plan:
+        return SlideContent("Analytics Plan", "Hypothesis testing plan", "No analytics plan was generated.", {"table": SlideTable([], [])})
+
+    priority_rank = {"high": 0, "medium": 1, "low": 2}
+    sorted_items = sorted(report.analytics_plan.plan, key=lambda item: priority_rank.get(item.priority, 1))
+    rows = [
+        (
+            _shorten(item.hypothesis, 62),
+            _shorten(item.business_metric_needed, 45),
+            _shorten(item.recommended_analysis_method, 58),
+            _shorten(item.decision_relevance, 70),
+        )
+        for item in sorted_items
+    ]
+    table = _limit_table(["Hypothesis", "Metric", "Method", "Decision Link"], rows, 5)
+    _append_table_overflow(appendix, "Analytics Plan Appendix", "Additional analytics plan rows", table)
+    return SlideContent(
+        title="Analytics Plan",
+        subtitle="Hypotheses to metrics, data, and methods",
+        key_message=_shorten(report.analytics_plan.summary, 170),
+        payload={"table": table},
+    )
+
+
 def _options_content(report: FinalConsultingReport, appendix: list[SlideContent]) -> SlideContent:
     options = []
     overflow = []
@@ -201,6 +246,8 @@ def _options_content(report: FinalConsultingReport, appendix: list[SlideContent]
             "upside": _shorten(option.upside, 75),
             "downside": _shorten(option.downside, 75),
             "implication": _shorten(option.decision_implication, 85),
+            "impact": _shorten(option.expected_impact, 75),
+            "confidence": _shorten(option.confidence_level, 35),
         }
         if index < 3:
             options.append(item)
@@ -291,8 +338,8 @@ def _action_plan_content(report: FinalConsultingReport, appendix: list[SlideCont
     _append_overflow(appendix, "Action Plan Appendix", "Additional action items", overflow)
     return SlideContent(
         title="30/60/90 Day Action Plan",
-        subtitle="Execution roadmap",
-        key_message="Translate the recommendation into near-term operating actions.",
+        subtitle="Execution and decision roadmap",
+        key_message=_shorten(report.decision_roadmap[0] if report.decision_roadmap else "Translate the recommendation into near-term operating actions.", 170),
         payload={"columns": columns},
     )
 
@@ -301,15 +348,21 @@ def _storyboard_content(report: FinalConsultingReport, appendix: list[SlideConte
     rows = []
     if report.deck_outline:
         rows = [
-            (str(item.slide_number), _shorten(item.title, 55), _shorten(item.core_message, 95), _shorten(item.suggested_visual, 50))
+            (
+                str(item.slide_number),
+                _shorten(item.title, 45),
+                _shorten(item.pyramid_role, 40),
+                _shorten(item.core_message, 85),
+                _shorten(item.suggested_visual, 45),
+            )
             for item in report.deck_outline.slides
         ]
-    table = _limit_table(["#", "Slide", "Core Message", "Visual"], rows, 10)
+    table = _limit_table(["#", "Slide", "Pyramid Role", "Core Message", "Visual"], rows, 10)
     _append_table_overflow(appendix, "Storyboard Appendix", "Additional storyboard slides", table)
     return SlideContent(
         title="Pitch Deck Storyboard",
-        subtitle="Suggested executive storyline",
-        key_message="Use this storyline to convert the analysis into a management presentation.",
+        subtitle="Pyramid Principle storyline",
+        key_message=_shorten(report.deck_outline.pyramid_principle_storyline[0] if report.deck_outline and report.deck_outline.pyramid_principle_storyline else "Use this storyline to convert the analysis into a management presentation.", 170),
         payload={"table": table},
     )
 
@@ -325,7 +378,7 @@ def _critic_content(report: FinalConsultingReport) -> SlideContent:
             "score": f"{report.critic.overall_score}/5",
             "strengths": _limit_list(report.critic.strengths, 4)[0],
             "weaknesses": _limit_list(report.critic.weaknesses, 4)[0],
-            "gaps": _limit_list(report.critic.critical_gaps, 4)[0],
+            "gaps": _limit_list(report.critic.critical_gaps + report.critic.red_team_challenges, 4)[0],
         },
     )
 

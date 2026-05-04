@@ -1,16 +1,37 @@
-# AI Business Consulting Agent
+# AI Consulting Operating System
 
-<img width="1999" height="1091" alt="AI Business Consulting Agent screenshot" src="https://github.com/user-attachments/assets/16e0ed8e-0f2b-4c5f-b778-0c1a64c86f99" />
+<img width="1999" height="1091" alt="AI Consulting Operating System screenshot" src="https://github.com/user-attachments/assets/16e0ed8e-0f2b-4c5f-b778-0c1a64c86f99" />
 
-A Streamlit application that turns an ambiguous business question into a structured consulting work product using a multi-step OpenAI-powered workflow.
+An AI-powered consulting operating system designed to reduce the cost and cycle time of first-pass strategy and analytics work.
 
-The app helps users frame a decision, build a MECE issue tree, generate hypotheses, define an analysis plan, create practical financial assumptions, draft an executive recommendation, outline a pitch deck, and critique the final output.
+The app behaves like a top-tier strategy consulting analyst with strong data analytics orientation. It helps teams frame a decision, build a MECE-style issue tree, generate hypotheses, define an analytics plan, create practical financial assumptions, synthesize insights, compare strategic options, draft an executive recommendation, outline a PowerPoint deck, and critique the final output.
 
 ## Project Overview
 
-This project demonstrates how agent-style workflows can support strategy consulting tasks. Instead of producing a single generic answer, the application decomposes the work into specialized steps and passes context forward through the workflow.
+This project demonstrates how agent-style workflows can accelerate repeatable strategy consulting work. Instead of producing a single generic answer, the application decomposes the work into specialized steps and passes context forward through the workflow.
 
-The final output is designed for management review: structured sections, explicit assumptions, directional financial logic, critic feedback, and a downloadable markdown report.
+The goal is not to replace human consultants or executive judgment. The system reduces dependency, cost, and turnaround time for first-pass work so business leaders and consultants can spend more time challenging assumptions, validating data, and making decisions.
+
+The final output is designed for management review: structured sections, explicit assumptions, directional financial logic, strategic option comparison, partner-style critique, and downloadable Markdown and PowerPoint deliverables.
+
+## Product Vision
+
+The long-term vision is a consulting operating system that automates and accelerates common advisory workstreams:
+
+- Problem framing
+- Issue tree generation
+- Hypothesis generation
+- Analytics planning
+- Data profiling
+- Predefined analysis
+- Insight synthesis
+- Strategic option comparison
+- Recommendation drafting
+- Executive memo generation
+- PowerPoint deck generation
+- Partner-style critique
+
+The current MVP focuses on the structured strategy workflow, executive memo, exportable report, deck generation, and quality review foundation.
 
 ## Problem Statement
 
@@ -21,7 +42,7 @@ Business teams often start with broad questions such as:
 - How can we improve revenue from this funnel?
 - Which customer segment should we prioritize?
 
-These questions usually need structure before they can become decision-ready. This app addresses that gap by turning raw business context into a consulting-style decision package.
+These questions usually need structure, analytical framing, and executive synthesis before they can become decision-ready. This app addresses that gap by turning raw business context into a first-pass consulting work product for human review.
 
 ## Key Features
 
@@ -32,12 +53,17 @@ These questions usually need structure before they can become decision-ready. Th
 - Pydantic schemas for structured JSON outputs
 - JSON parsing with user-friendly Streamlit errors
 - Local logging for workflow step status and failed LLM outputs
+- Optional CSV/XLSX upload with in-memory pandas profiling
 - Practical financial assumption model with scenario calculations
-- Senior-manager-style critic review
+- Strategic option comparison and recommendation drafting
+- Hypothesis-to-analytics planner with metrics, data fields, methods, and priorities
+- Data request list, evidence register, KPI / driver tree, and assumption register
+- Decision roadmap and stakeholder lens for CEO, CFO, COO, and Data Team review
+- Partner-style critic review
 - Evaluation tab for user scoring and reviewer notes
 - Local JSON history for evaluations
 - Markdown export with timestamped filenames
-- PowerPoint export with a simple 16:9 consulting-style deck
+- PowerPoint export with a 16:9 executive-style strategy deck
 - Environment-based configuration with no hardcoded API keys
 
 ## Architecture Diagram
@@ -49,6 +75,7 @@ User
 Streamlit UI (app.py)
   |
   |-- sample case selector
+  |-- optional dataset uploader
   |-- business input form
   |-- output tabs
   |-- evaluation tab
@@ -59,6 +86,7 @@ Workflow Orchestrator (core/workflow.py)
   +--> Problem Framer Agent
   +--> Issue Tree Builder Agent
   +--> Hypothesis Generator Agent
+  +--> Analytics Planner Agent
   +--> Analysis Planner Agent
   +--> Financial Analyst Agent
   +--> Memo Writer Agent
@@ -88,6 +116,7 @@ ai-business-consultant-mvp/
     problem_framer.py
     issue_tree_builder.py
     hypothesis_generator.py
+    analytics_planner.py
     analysis_planner.py
     financial_analyst.py
     memo_writer.py
@@ -106,11 +135,15 @@ ai-business-consultant-mvp/
     markdown_exporter.py
     prompt_loader.py
 
+  tools/
+    data_profiler.py
+
   prompts/
     system.md
     problem_framing.md
     issue_tree.md
     hypotheses.md
+    analytics_planner.md
     analysis_plan.md
     financial_assumptions.md
     executive_memo.md
@@ -284,42 +317,68 @@ In the Streamlit app:
 
 Included examples cover matcha delivery, insurance app funnel growth, AI telesales quality control, car insurance renewal segmentation, and SME analytics services.
 
+## Optional Dataset Upload
+
+Users can upload a CSV or XLSX file from the Streamlit sidebar. The dataframe is stored only in `st.session_state`; there is no database or file persistence.
+
+The app profiles the dataset before analysis and sends only metadata and summarized statistics into the workflow, not the full raw dataset. The profile includes shape, columns, inferred types, missing values, duplicate rows, numeric and categorical summaries, detected date columns, sample rows for UI review, data quality notes, and possible analysis suggestions.
+
+If no dataset is uploaded, the app continues to run in text-only consulting mode.
+
+## Analytics Workbench
+
+After a dataset is uploaded and profiled, users can run safe predefined pandas analyses from the Analytics Workbench:
+
+- **Data Exploration**: dataset overview, column profiling, data quality scoring, numeric/categorical/date profiles, business readiness signals, and an executive summary of what analysis is possible next.
+- **Segmentation Analysis**: comparison of one numeric or binary metric across one segment dimension, with optional weighting, minimum segment-size controls, attractiveness scoring, top/bottom segment views, interpretation labels, and recommended actions.
+
+The app does not allow arbitrary Python code generated by the LLM. Analyses run only through fixed template functions in `tools/analysis_tools.py`, with required column validation and graceful warnings for weak or invalid inputs.
+
+Saved analysis results are stored in `st.session_state` for the current session. Later phases can use these structured summaries for insight synthesis and presentation support without exposing the full raw dataset to the LLM.
+
+Other analysis templates are intentionally out of scope for the current MVP. The focus is to make exploration and segmentation strong enough for first-pass consulting insight synthesis before adding more analytical modes.
+
 ## How The Consulting Workflow Works
 
 The workflow runs sequentially. Each step receives the original business input and all prior step outputs.
 
-1. **Problem Framing** creates a decision question, context summary, success criteria, and key unknowns.
+1. **Problem Framing** creates a decision question, SCQ framing, success criteria, and key unknowns.
 2. **Issue Tree** structures the problem into MECE branches and high-leverage questions.
-3. **Hypotheses** proposes testable hypotheses with evidence needs and decision impact.
-4. **Analysis Plan** defines workstreams, data needs, methods, owners, and timing.
-5. **Financial Assumptions** creates assumption tables, scenario inputs, gross margin logic, and break-even calculations.
-6. **Executive Memo** drafts the recommendation, rationale, risks, mitigations, and next steps.
-7. **Deck Outline** turns the recommendation into a 10-slide executive presentation structure.
-8. **Critic Review** evaluates the work across clarity, MECE quality, hypothesis strength, practicality, financial logic, missing assumptions, hallucination risk, and executive readiness.
+3. **Hypotheses** proposes testable hypotheses, a hypothesis tree, evidence needs, and decision impact.
+4. **Analytics Planner** translates hypotheses into analytical questions, metrics, data fields, methods, expected outputs, decision relevance, priorities, and limitations.
+5. **Analysis Plan** defines broader consulting workstreams, data requests, evidence register, methods, owners, and timing.
+6. **Financial Assumptions** creates KPI / driver logic, assumption tables, scenario inputs, gross margin logic, and break-even calculations.
+7. **Executive Memo** drafts the recommendation, rationale, strategic options, expected impact, stakeholder lens, decision roadmap, risks, mitigations, and next steps.
+8. **Deck Outline** turns the recommendation into a Pyramid Principle executive presentation structure.
+9. **Critic Review** evaluates the work across clarity, MECE quality, hypothesis strength, practicality, financial logic, missing assumptions, hallucination risk, executive readiness, and red-team objections.
 
-The final markdown export includes:
+The final Markdown export is a first-pass strategy and analytics work product. It includes:
 
 - Executive Summary
 - Decision Question
-- Situation / Context
-- Key Business Objective
+- SCQ: Situation / Complication / Question
+- Success Criteria
 - Issue Tree
-- Key Hypotheses
-- Analysis Plan
-- Market / Customer / Competitor Considerations
-- Strategic Options
-- Recommendation
-- Financial Assumptions
-- Scenario Analysis
-- Key Risks
-- Mitigation Plan
+- Hypothesis Tree
+- Analytics Plan
+- KPI / Driver Tree
+- Data Request List
+- Evidence Register
 - Assumption Register
-- Data Gaps
-- Next 30 / 60 / 90 Day Action Plan
-- 10-Slide Pitch Deck Outline
-- Critic Review
+- Strategic Options Matrix
+- Recommendation With Rationale
+- Expected Impact
+- Scenario / Sensitivity Analysis
+- Risk Register With Mitigation
+- 30 / 60 / 90-Day Execution Plan
+- Decision Roadmap
+- Stakeholder Lens: CEO / CFO / COO / Data Team
+- Partner Review / Red Team Critique
+- Slide Storyline Using Pyramid Principle
+- Consulting Work Automated
+- Human Consultant / Executive Judgment Still Needed
 
-The app also exports a concise PowerPoint version with title, executive summary, decision context, issue tree, hypotheses, strategic options, recommendation, financial assumptions, risks, 30/60/90 actions, pitch deck outline, and critic review slides.
+The app also exports a concise PowerPoint version with title, executive summary, decision context, issue tree, hypotheses, analytics plan, strategic options, recommendation, financial assumptions, risks, 30/60/90 actions, deck storyline, and critic review slides.
 
 ## Evaluation Approach
 
@@ -340,13 +399,14 @@ Reviewer notes are saved locally to:
 eval_outputs/evaluations.json
 ```
 
-The app also displays a simple historical evaluation table. This creates a practical feedback loop for comparing output quality across prompts, models, and sample cases.
+The app also displays a simple historical evaluation table. This creates a practical feedback loop for comparing first-pass output quality across prompts, models, and sample cases.
 
 ## Current Limitations
 
 - Outputs are AI-generated and require human review before business use.
 - Financial assumptions are directional and should not replace a validated financial model.
 - The app does not browse the web or verify market data.
+- Data profiling and predefined analysis are part of the broader vision and are not yet implemented as separate workflow modules.
 - Evaluation history and logs are local-only.
 - There is no database, authentication, or multi-user project history.
 - The full workflow requires a valid OpenAI API key.
@@ -358,11 +418,11 @@ The app also displays a simple historical evaluation table. This creates a pract
 - Add a mock LLM mode for demos and CI.
 - Add saved project history with named consulting cases.
 - Add richer financial model outputs and sensitivity analysis.
+- Add data profiling and predefined analysis modules.
 - Add optional web research or document upload support.
-- Add PPTX export for the deck outline.
 - Improve Streamlit rendering of structured outputs into cleaner tables and sections.
 - Add deployment configuration for hosted demos.
 
 ## Disclaimer
 
-This project is an MVP for strategy-analysis assistance. It is not legal, financial, or professional consulting advice.
+This project is an MVP for AI-assisted strategy and analytics work. It is intended to reduce cost and turnaround time for first-pass consulting deliverables, not to fully replace human consultants, expert validation, or executive judgment. It is not legal, financial, or professional consulting advice.

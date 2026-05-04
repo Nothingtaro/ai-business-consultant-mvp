@@ -9,8 +9,15 @@ from typing import Any
 import streamlit as st
 
 from core.config import AppConfig
-from core.schemas import BusinessProblemInput
+from core.schemas import AnalysisResult, BusinessProblemInput, DataProfile
 from core.workflow import WORKFLOW_STEPS, run_consulting_workflow
+from tools.analysis_tools import (
+    get_categorical_columns,
+    get_numeric_columns,
+    run_eda,
+    run_segmentation_analysis,
+)
+from tools.data_profiler import profile_uploaded_dataset
 from utils.app_logging import get_app_logger
 from utils.json_parser import JsonParsingError
 from utils.startup_validation import StartupValidationResult, validate_startup
@@ -38,7 +45,9 @@ TAB_LABELS = {
     "problem_framing": "Problem Framing",
     "issue_tree": "Issue Tree",
     "hypotheses": "Hypotheses",
+    "analytics_plan": "Analytics Plan",
     "analysis_plan": "Analysis Plan",
+    "insight_synthesis": "Insight Synthesis",
     "financial_assumptions": "Financial Assumptions",
     "executive_memo": "Executive Memo",
     "deck_outline": "Deck Outline",
@@ -58,7 +67,7 @@ FORM_FIELD_KEYS = {
 
 
 st.set_page_config(
-    page_title="AI Business Consulting Agent",
+    page_title="AI Consulting Operating System",
     layout="wide",
 )
 
@@ -74,6 +83,16 @@ def initialize_state() -> None:
         st.session_state.error = None
     if "selected_sample_case" not in st.session_state:
         st.session_state.selected_sample_case = "Start from a blank case"
+    if "uploaded_dataframe" not in st.session_state:
+        st.session_state.uploaded_dataframe = None
+    if "data_profile" not in st.session_state:
+        st.session_state.data_profile = None
+    if "uploaded_file_signature" not in st.session_state:
+        st.session_state.uploaded_file_signature = None
+    if "dataset_uploader_key" not in st.session_state:
+        st.session_state.dataset_uploader_key = 0
+    if "analysis_results" not in st.session_state:
+        st.session_state.analysis_results = []
 
 
 def load_sample_cases(path: Path = SAMPLE_CASES_PATH) -> list[dict[str, Any]]:
@@ -108,6 +127,11 @@ def reset_workspace() -> None:
     st.session_state.business_input = None
     st.session_state.error = None
     st.session_state.selected_sample_case = "Start from a blank case"
+    st.session_state.uploaded_dataframe = None
+    st.session_state.data_profile = None
+    st.session_state.uploaded_file_signature = None
+    st.session_state.dataset_uploader_key += 1
+    st.session_state.analysis_results = []
     clear_input_form()
 
 
@@ -172,15 +196,18 @@ def configure_streamlit_secrets_environment() -> None:
 
 def render_sidebar(config: AppConfig) -> None:
     with st.sidebar:
-        st.header("Mission Control")
-        st.caption("Premium AI workspace for structured strategy analysis and executive-ready deliverables.")
+        st.header("Consulting OS")
+        st.caption(
+            "AI workspace for accelerating first-pass strategy and analytics work before human review."
+        )
 
         render_sidebar_sample_case_selector()
+        render_sidebar_dataset_upload()
         render_sidebar_business_summary()
 
         st.divider()
         render_section_header("Analysis Mode")
-        st.caption("Mode: Structured consulting workflow")
+        st.caption("Mode: Top-tier strategy workflow with analytics-oriented deliverables")
         st.text_input("Model", value=config.model, key="model_name")
         st.caption("Set `OPENAI_MODEL` in `.env` or deployment secrets to change the default.")
 
@@ -189,11 +216,13 @@ def render_sidebar(config: AppConfig) -> None:
             "1. Problem framing\n"
             "2. Issue tree\n"
             "3. Hypotheses\n"
-            "4. Analysis plan\n"
-            "5. Financial assumptions\n"
-            "6. Executive memo\n"
-            "7. Deck outline\n"
-            "8. Critic review"
+            "4. Analytics planner\n"
+            "5. Consulting analysis plan\n"
+            "6. Insight synthesis\n"
+            "7. Financial and data assumptions\n"
+            "8. Executive memo\n"
+            "9. Executive deck outline\n"
+            "10. Partner-style critique"
         )
 
         render_sidebar_export_center()
@@ -219,6 +248,49 @@ def render_sidebar_sample_case_selector() -> None:
     if st.button("Use sample case", disabled=selected_case is None, use_container_width=True):
         apply_sample_case(selected_case)
         st.rerun()
+
+
+def render_sidebar_dataset_upload() -> None:
+    render_section_header("Dataset Upload")
+    existing_profile = st.session_state.get("data_profile")
+    if existing_profile:
+        st.caption(f"Active profile: {existing_profile.file_name}")
+        if st.button("Clear dataset", use_container_width=True):
+            st.session_state.uploaded_dataframe = None
+            st.session_state.data_profile = None
+            st.session_state.uploaded_file_signature = None
+            st.session_state.analysis_results = []
+            st.session_state.dataset_uploader_key += 1
+            st.rerun()
+
+    uploaded_file = st.file_uploader(
+        "CSV or XLSX",
+        type=["csv", "xlsx"],
+        key=f"dataset_upload_{st.session_state.dataset_uploader_key}",
+        help="Optional. The app stores the dataframe in session memory and sends only profile metadata to the LLM.",
+    )
+    if uploaded_file is None:
+        return
+
+    signature = (uploaded_file.name, uploaded_file.size)
+    if signature == st.session_state.uploaded_file_signature:
+        return
+
+    try:
+        dataframe, profile = profile_uploaded_dataset(uploaded_file, uploaded_file.name)
+    except Exception as exc:
+        st.session_state.uploaded_dataframe = None
+        st.session_state.data_profile = None
+        st.session_state.uploaded_file_signature = None
+        st.session_state.analysis_results = []
+        st.error(f"Could not profile dataset: {exc}")
+        return
+
+    st.session_state.uploaded_dataframe = dataframe
+    st.session_state.data_profile = profile
+    st.session_state.analysis_results = []
+    st.session_state.uploaded_file_signature = signature
+    st.success(f"Profiled {profile.row_count:,} rows x {profile.column_count:,} columns.")
 
 
 def render_sidebar_business_summary() -> None:
@@ -265,7 +337,10 @@ def render_startup_status(validation: StartupValidationResult, config: AppConfig
 
 def render_input_form() -> BusinessProblemInput | None:
     with st.form("business_problem_form"):
-        render_section_header("Project Brief", "Define the decision context the consulting workflow should solve.")
+        render_section_header(
+            "Project Brief",
+            "Define the strategic question, operating context, and expected first-pass work product.",
+        )
         problem = st.text_area(
             "Business problem",
             placeholder="Example: Should we launch a premium subscription tier for SMB customers?",
@@ -297,7 +372,7 @@ def render_input_form() -> BusinessProblemInput | None:
                 key="expected_output",
             )
 
-        submitted = st.form_submit_button("Run analysis", type="primary", use_container_width=True)
+        submitted = st.form_submit_button("Run consulting workflow", type="primary", use_container_width=True)
 
     st.button("Clear project brief", use_container_width=True, on_click=clear_input_form)
 
@@ -325,48 +400,63 @@ def render_outputs() -> None:
         return
 
     st.divider()
-    render_section_header("Consultant Canvas", "Review the generated strategy work product by decision area.")
+    render_section_header(
+        "Strategy Workbench",
+        "Review the generated first-pass strategy and analytics work product by decision area.",
+    )
     render_intelligence_panel(report)
     render_main_export_center(report)
 
     tabs = st.tabs(
         [
             "Overview",
-            "Issue Tree",
-            "Hypotheses",
-            "Strategic Options",
+            "Data Profile",
+            "Trees",
+            "Data & Evidence",
+            "Insights",
+            "Options",
             "Financials",
             "Risks",
-            "Action Plan",
-            "Deck Outline",
-            "Critic Review",
+            "Execution",
+            "Stakeholders",
+            "Deck Storyline",
+            "Partner Review",
         ]
     )
 
     with tabs[0]:
         render_overview_tab(report)
     with tabs[1]:
-        render_issue_tree_tab(report)
+        render_data_profile_tab(report)
     with tabs[2]:
-        render_hypotheses_tab(report)
+        render_trees_tab(report)
     with tabs[3]:
-        render_strategic_options_tab(report)
+        render_data_evidence_tab(report)
     with tabs[4]:
-        render_financials_tab(report)
+        render_insight_synthesis_tab(report)
     with tabs[5]:
-        render_risks_tab(report)
+        render_strategic_options_tab(report)
     with tabs[6]:
-        render_action_plan_tab(report)
+        render_financials_tab(report)
     with tabs[7]:
-        render_deck_outline_tab(report)
+        render_risks_tab(report)
     with tabs[8]:
+        render_execution_tab(report)
+    with tabs[9]:
+        render_stakeholder_lens_tab(report)
+    with tabs[10]:
+        render_deck_outline_tab(report)
+    with tabs[11]:
         render_critic_review_tab(report)
 
 
 def render_main_export_center(report) -> None:
-    render_section_header("Export Center", "Download the completed consulting work product as Markdown or PowerPoint.")
+    render_section_header(
+        "Export Center",
+        "Download the first-pass consulting work product as Markdown or PowerPoint for human review.",
+    )
     render_export_center(report)
-    st.caption("PowerPoint export generates a consulting-style `.pptx` deck from the final report.")
+    st.caption("PowerPoint export generates an executive-style `.pptx` deck from the final report.")
 
 
 def render_intelligence_panel(report) -> None:
@@ -394,9 +484,10 @@ def render_intelligence_panel(report) -> None:
 
 
 def render_overview_tab(report) -> None:
-    render_section_header("Overview", "Executive summary, decision question, and business context.")
+    render_section_header("Overview", "Executive summary, decision question, and business context for review.")
     if report.problem_framing:
         render_decision_callout(report.problem_framing.decision_question)
+        render_scq(report)
     summary_bullets = []
     if report.executive_memo:
         summary_bullets.append(f"Recommendation: {report.executive_memo.recommendation}")
@@ -414,25 +505,333 @@ def render_overview_tab(report) -> None:
     st.write(report.key_business_objective or "Not provided.")
     with st.expander("Situation / context"):
         _render_bullets(report.situation_context)
+    render_section_header("Expected Impact", "Assumption-led until validated with uploaded data or source evidence.")
+    render_concise_bullets(report.expected_impact)
 
 
-def render_issue_tree_tab(report) -> None:
-    render_section_header("Issue Tree", "MECE structure and highest-leverage branches.")
+def render_scq(report) -> None:
+    scq = report.problem_framing.scq
+    rows = [
+        {"Element": "Situation", "Content": scq.situation or "Not provided."},
+        {"Element": "Complication", "Content": scq.complication or "Not provided."},
+        {"Element": "Question", "Content": scq.question or report.problem_framing.decision_question},
+    ]
+    st.markdown("### SCQ")
+    st.dataframe(rows, use_container_width=True, hide_index=True)
+
+
+def render_data_profile_tab(report) -> None:
+    profile = report.data_profile or st.session_state.get("data_profile")
+    render_section_header("Data Profile", "Uploaded dataset metadata and summarized statistics.")
+    if not profile:
+        render_empty_state("No dataset uploaded", "The consulting workflow can run in text-only mode without a dataset.")
+        return
+    render_data_profile(profile)
+    render_analytics_workbench()
+
+
+def render_data_profile(profile: DataProfile) -> None:
+    metric_cols = st.columns(4)
+    with metric_cols[0]:
+        render_metric_card("File", profile.file_name)
+    with metric_cols[1]:
+        render_metric_card("Rows", f"{profile.row_count:,}")
+    with metric_cols[2]:
+        render_metric_card("Columns", f"{profile.column_count:,}")
+    with metric_cols[3]:
+        render_metric_card("Duplicates", f"{profile.duplicate_row_count:,}")
+
+    render_section_header("Columns")
+    st.dataframe(
+        [
+            {
+                "Column": column,
+                "Type": profile.inferred_dtypes.get(column, ""),
+                "Missing": profile.missing_values.get(column, 0),
+                "Missing %": profile.missing_percentages.get(column, 0),
+            }
+            for column in profile.column_names
+        ],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    with st.expander("Numeric summary"):
+        st.dataframe(_dict_table(profile.numeric_summary), use_container_width=True, hide_index=True)
+    with st.expander("Categorical summary"):
+        st.dataframe(_dict_table(profile.categorical_summary), use_container_width=True, hide_index=True)
+    with st.expander("Sample rows"):
+        st.dataframe(profile.sample_rows, use_container_width=True, hide_index=True)
+
+    render_section_header("Data Quality Notes")
+    render_concise_bullets(profile.data_quality_notes)
+    render_section_header("Possible Analysis Suggestions")
+    render_concise_bullets(profile.possible_analysis_suggestions)
+
+
+def render_analytics_workbench() -> None:
+    dataframe = st.session_state.get("uploaded_dataframe")
+    if dataframe is None or dataframe.empty:
+        return
+
+    render_section_header(
+        "Analytics Workbench",
+        "Run focused, predefined pandas analysis templates on the uploaded dataset.",
+    )
+    numeric_columns = get_numeric_columns(dataframe)
+    categorical_columns = get_categorical_columns(dataframe)
+    all_columns = [str(column) for column in dataframe.columns]
+
+    analysis_options = [
+        "Data Exploration",
+        "Segmentation Analysis",
+    ]
+    selected = st.selectbox("Analysis type", analysis_options, key="analysis_workbench_type")
+    st.caption(_analysis_availability_note(selected, numeric_columns, categorical_columns))
+
+    result = None
+    if selected == "Data Exploration":
+        if st.button("Run data exploration", type="primary"):
+            result = run_eda(dataframe)
+    elif selected == "Segmentation Analysis":
+        segment_col = st.selectbox("Segment column", categorical_columns or all_columns, key="segmentation_segment_col")
+        metric_col = st.selectbox("Metric column", numeric_columns or all_columns, key="segmentation_metric_col")
+        weight_options = ["None", *numeric_columns]
+        weight_col = st.selectbox("Optional weight column", weight_options, key="segmentation_weight_col")
+        min_segment_size = st.number_input(
+            "Minimum segment size",
+            min_value=1,
+            max_value=max(1, len(dataframe)),
+            value=min(5, max(1, len(dataframe))),
+            step=1,
+            key="segmentation_min_segment_size",
+        )
+        if st.button("Run segmentation", type="primary"):
+            result = run_segmentation_analysis(
+                dataframe,
+                segment_col,
+                metric_col,
+                None if weight_col == "None" else weight_col,
+                int(min_segment_size),
+            )
+
+    if result:
+        _save_analysis_result(result)
+        st.success("Analysis result saved in session state.")
+        render_analysis_result(result)
+
+    saved_results = st.session_state.get("analysis_results", [])
+    if saved_results:
+        with st.expander(f"Saved analysis results ({len(saved_results)})", expanded=False):
+            for index, saved in enumerate(saved_results, start=1):
+                st.markdown(f"### {index}. {saved.title}")
+                render_analysis_result(saved)
+
+
+def render_analysis_result(result: AnalysisResult) -> None:
+    if result.analysis_type == "data_exploration":
+        render_data_exploration_result(result)
+        return
+    if result.analysis_type == "segmentation":
+        render_segmentation_result(result)
+        return
+
+    render_section_header(result.title)
+    st.write(result.summary)
+    if result.key_metrics:
+        st.markdown("### Key Metrics")
+        st.dataframe([result.key_metrics], use_container_width=True, hide_index=True)
+    if result.result_table:
+        st.markdown("### Result Table")
+        st.dataframe(result.result_table, use_container_width=True, hide_index=True)
+    if result.warnings:
+        st.markdown("### Warnings")
+        render_concise_bullets(result.warnings)
+    if result.limitations:
+        st.markdown("### Limitations")
+        render_concise_bullets(result.limitations)
+    if result.suggested_next_steps:
+        st.markdown("### Suggested Next Steps")
+        render_concise_bullets(result.suggested_next_steps)
+
+
+def render_data_exploration_result(result: AnalysisResult) -> None:
+    render_section_header(result.title)
+    metrics = result.key_metrics or {}
+    overview = metrics.get("dataset_overview", {})
+    quality = metrics.get("data_quality_assessment", {})
+    readiness = metrics.get("business_analysis_readiness", {})
+    numeric_profile = metrics.get("numeric_profile", [])
+    categorical_profile = metrics.get("categorical_profile", [])
+    date_profile = metrics.get("date_profile", [])
+
+    st.write(metrics.get("executive_summary") or result.summary)
+
+    metric_cols = st.columns(5)
+    with metric_cols[0]:
+        render_metric_card("Rows", f"{overview.get('row_count', 0):,}")
+    with metric_cols[1]:
+        render_metric_card("Columns", f"{overview.get('column_count', 0):,}")
+    with metric_cols[2]:
+        render_metric_card("Duplicates", f"{overview.get('duplicate_rows', 0):,}")
+    with metric_cols[3]:
+        render_metric_card("Memory MB", str(overview.get("memory_usage_mb", "N/A")))
+    with metric_cols[4]:
+        render_metric_card("Quality Score", f"{quality.get('data_quality_score', 'N/A')}/5")
+
+    tabs = st.tabs(["Overview", "Column Profile", "Numeric", "Categorical", "Dates", "Readiness"])
+    with tabs[0]:
+        st.markdown("### Dataset Overview")
+        st.dataframe([overview], use_container_width=True, hide_index=True)
+        st.markdown("### Data Quality Assessment")
+        quality_rows = [
+            {"Area": "Missing Values", "Finding": _format_list_for_display(quality.get("missing_value_summary", []))},
+            {"Area": "Duplicates", "Finding": quality.get("duplicate_summary", "Not provided.")},
+            {"Area": "Constant Columns", "Finding": _format_list_for_display(quality.get("constant_columns", []))},
+            {"Area": "Near-Constant Columns", "Finding": _format_list_for_display(quality.get("near_constant_columns", []))},
+            {"Area": "High-Cardinality Categories", "Finding": _format_list_for_display(quality.get("high_cardinality_categorical_columns", []))},
+            {"Area": "Potential ID Columns", "Finding": _format_list_for_display(quality.get("potential_id_columns", []))},
+            {"Area": "Potential Leakage Columns", "Finding": _format_list_for_display(quality.get("potential_leakage_columns", []))},
+            {"Area": "Suspicious Values", "Finding": _format_list_for_display(quality.get("suspicious_values", []))},
+        ]
+        st.dataframe(quality_rows, use_container_width=True, hide_index=True)
+        if result.warnings:
+            st.markdown("### Warnings")
+            render_concise_bullets(result.warnings)
+    with tabs[1]:
+        st.markdown("### Column Profile")
+        st.dataframe(result.result_table, use_container_width=True, hide_index=True)
+    with tabs[2]:
+        st.markdown("### Numeric Profile")
+        if numeric_profile:
+            st.dataframe(numeric_profile, use_container_width=True, hide_index=True)
+        else:
+            render_empty_state("No numeric profile", "No numeric columns were detected.")
+    with tabs[3]:
+        st.markdown("### Categorical Profile")
+        if categorical_profile:
+            flattened = []
+            for row in categorical_profile:
+                flattened.append(
+                    {
+                        "column": row.get("column"),
+                        "cardinality": row.get("cardinality"),
+                        "top_values": _format_top_values(row.get("top_values", [])),
+                        "rare_category_count": row.get("rare_category_count"),
+                        "long_tail_warning": row.get("long_tail_warning") or "",
+                    }
+                )
+            st.dataframe(flattened, use_container_width=True, hide_index=True)
+        else:
+            render_empty_state("No categorical profile", "No categorical columns were detected.")
+    with tabs[4]:
+        st.markdown("### Date Profile")
+        if date_profile:
+            st.dataframe(date_profile, use_container_width=True, hide_index=True)
+        else:
+            render_empty_state("No date profile", "No date-like columns were detected.")
+    with tabs[5]:
+        st.markdown("### Business Analysis Readiness")
+        readiness_rows = [
+            {"Readiness Area": "Likely Segmentation Columns", "Columns": _format_list_for_display(readiness.get("likely_segmentation_columns", []))},
+            {"Readiness Area": "Likely Target Metrics", "Columns": _format_list_for_display(readiness.get("likely_target_metric_columns", []))},
+            {"Readiness Area": "Likely Revenue / Value Columns", "Columns": _format_list_for_display(readiness.get("likely_revenue_value_columns", []))},
+            {"Readiness Area": "Likely Conversion / Binary Columns", "Columns": _format_list_for_display(readiness.get("likely_conversion_binary_columns", []))},
+            {"Readiness Area": "Likely Date Columns", "Columns": _format_list_for_display(readiness.get("likely_date_columns", []))},
+        ]
+        st.dataframe(readiness_rows, use_container_width=True, hide_index=True)
+        st.markdown("### Suggested Next Analyses")
+        render_concise_bullets(readiness.get("suggested_next_analyses", result.suggested_next_steps))
+
+    with st.expander("Limitations"):
+        render_concise_bullets(result.limitations)
+
+
+def render_segmentation_result(result: AnalysisResult) -> None:
+    render_section_header(result.title)
+    st.write(result.summary)
+    metrics = result.key_metrics or {}
+
+    metric_cols = st.columns(5)
+    with metric_cols[0]:
+        render_metric_card("Segments", str(metrics.get("segment_count", "N/A")))
+    with metric_cols[1]:
+        render_metric_card("Usable Rows", f"{metrics.get('usable_row_count', 0):,}")
+    with metric_cols[2]:
+        render_metric_card("Metric Total", str(metrics.get("metric_total", "N/A")))
+    with metric_cols[3]:
+        render_metric_card("Top 3 Share", f"{metrics.get('top_3_metric_share_pct', 'N/A')}%")
+    with metric_cols[4]:
+        render_metric_card("Min Size", str(metrics.get("minimum_segment_size", "N/A")))
+
+    tabs = st.tabs(["Summary", "Top / Bottom", "Interpretation", "Scoring"])
+    with tabs[0]:
+        st.markdown("### Segment Summary Table")
+        st.dataframe(result.result_table, use_container_width=True, hide_index=True)
+        if result.warnings:
+            st.markdown("### Warnings")
+            render_concise_bullets(result.warnings)
+    with tabs[1]:
+        st.markdown("### Top 5 By Performance")
+        _render_optional_dataframe(metrics.get("top_segments_by_performance", []), "No reliable top-performance segments.")
+        st.markdown("### Top 5 By Total Contribution")
+        _render_optional_dataframe(metrics.get("top_segments_by_total_contribution", []), "No contribution segments available.")
+        st.markdown("### Bottom 5 By Performance")
+        _render_optional_dataframe(metrics.get("bottom_segments_by_performance", []), "No reliable bottom-performance segments.")
+        st.markdown("### Insufficient Sample")
+        _render_optional_dataframe(metrics.get("segments_with_insufficient_sample", []), "No segments below the minimum size threshold.")
+    with tabs[2]:
+        interpretation = metrics.get("business_interpretation", {})
+        st.markdown("### Attractive Segments")
+        render_concise_bullets(interpretation.get("attractive_segments", []))
+        st.markdown("### Underperforming Segments")
+        render_concise_bullets(interpretation.get("underperforming_segments", []))
+        st.markdown("### Requires Validation")
+        render_concise_bullets(interpretation.get("segments_requiring_validation", []))
+        st.markdown("### Business Actions To Consider")
+        render_concise_bullets(interpretation.get("business_actions_to_consider", []))
+        st.markdown("### Data Limitations")
+        render_concise_bullets(interpretation.get("data_limitations", result.limitations))
+    with tabs[3]:
+        st.markdown("### Attractiveness Scoring Logic")
+        st.write(metrics.get("scoring_logic", "Not provided."))
+        st.markdown("### Recommended Actions")
+        render_concise_bullets(metrics.get("recommended_actions", result.suggested_next_steps))
+        with st.expander("General limitations"):
+            render_concise_bullets(result.limitations)
+
+
+def _save_analysis_result(result: AnalysisResult) -> None:
+    st.session_state.analysis_results.append(result)
+
+
+def render_trees_tab(report) -> None:
+    render_section_header("Issue Tree", "MECE-style structure and highest-leverage branches.")
     if not report.issue_tree:
         st.info("Issue tree not generated yet.")
-        return
-    render_issue_tree_cards(report.issue_tree)
-    with st.expander("Branch logic"):
-        st.write(report.issue_tree.branch_logic)
-    st.markdown("### Highest-Leverage Branches")
-    render_concise_bullets(report.issue_tree.highest_leverage_branches)
+    else:
+        render_issue_tree_cards(report.issue_tree)
+        with st.expander("Branch logic"):
+            st.write(report.issue_tree.branch_logic)
+        st.markdown("### Highest-Leverage Branches")
+        render_concise_bullets(report.issue_tree.highest_leverage_branches)
 
-
-def render_hypotheses_tab(report) -> None:
     render_section_header("Hypotheses", "Testable beliefs, evidence needs, and decision impact.")
     if not report.hypotheses:
         st.info("Hypotheses not generated yet.")
         return
+    tree_rows = [
+        {
+            "Branch": item.branch,
+            "Hypotheses": "; ".join(item.hypotheses),
+            "Evidence Needed": "; ".join(item.evidence_needed),
+            "Decision Link": item.decision_link,
+        }
+        for item in report.hypotheses.hypothesis_tree
+    ]
+    if tree_rows:
+        st.markdown("### Hypothesis Tree")
+        st.dataframe(tree_rows, use_container_width=True, hide_index=True)
     rows = [
         {
             "Hypothesis": item.hypothesis,
@@ -445,15 +844,154 @@ def render_hypotheses_tab(report) -> None:
     st.dataframe(rows, use_container_width=True, hide_index=True)
     st.markdown(f"**Initial lean:** {report.hypotheses.initial_lean}")
 
+    render_section_header("KPI / Driver Tree", "Management KPIs, core drivers, formulas, and data needed.")
+    render_kpi_driver_tree(report)
+
+
+def render_kpi_driver_tree(report) -> None:
+    rows = [
+        {
+            "KPI": item.kpi,
+            "Driver": item.driver,
+            "Formula / Logic": item.formula_or_logic,
+            "Data Needed": item.data_needed,
+            "Assumption If No Data": item.assumption_if_no_data,
+        }
+        for item in report.kpi_driver_tree
+    ]
+    if rows:
+        st.dataframe(rows, use_container_width=True, hide_index=True)
+    else:
+        render_empty_state("No KPI driver tree", "KPI and driver logic has not been generated yet.")
+
+
+def render_data_evidence_tab(report) -> None:
+    render_analytics_plan(report)
+
+    render_section_header("Data Request List", "Data needed to separate validated findings from assumptions.")
+    data_rows = [
+        {
+            "Data": item.data_name,
+            "Purpose": item.purpose,
+            "Owner": item.owner,
+            "Priority": item.priority,
+            "Required Fields": "; ".join(item.required_fields),
+            "Assumption If Missing": item.assumption_if_missing,
+        }
+        for item in report.data_request_list
+    ]
+    if data_rows:
+        st.dataframe(data_rows, use_container_width=True, hide_index=True)
+    else:
+        render_empty_state("No data requests", "Data requests have not been generated yet.")
+
+    render_section_header("Evidence Register", "Findings are labeled as data-backed or assumption-led.")
+    evidence_rows = [
+        {
+            "Claim": item.claim,
+            "Evidence": item.evidence,
+            "Source": item.source,
+            "Data-Backed": "Yes" if item.data_backed else "No - assumption-led",
+            "Strength": item.strength,
+            "Implication": item.implication,
+        }
+        for item in report.evidence_register
+    ]
+    if evidence_rows:
+        st.dataframe(evidence_rows, use_container_width=True, hide_index=True)
+    else:
+        render_empty_state("No evidence register", "Evidence items have not been generated yet.")
+
+    render_section_header("Assumption Register", "Open assumptions that require validation before high-stakes decisions.")
+    render_assumption_table(report.assumption_register)
+
+
+def render_analytics_plan(report) -> None:
+    render_section_header(
+        "Analytics Plan",
+        "Hypotheses translated into analytical questions, metrics, data fields, and methods.",
+    )
+    if not report.analytics_plan or not report.analytics_plan.plan:
+        render_empty_state("No analytics plan", "Analytics planner output has not been generated yet.")
+        return
+    st.caption(report.analytics_plan.summary)
+    rows = [
+        {
+            "Hypothesis": item.hypothesis,
+            "Analytical Question": item.analytical_question,
+            "Metric Needed": item.business_metric_needed,
+            "Data Fields": "; ".join(item.data_fields_needed),
+            "Method": item.recommended_analysis_method,
+            "Expected Output": item.expected_output,
+            "Decision Relevance": item.decision_relevance,
+            "Priority": item.priority.title(),
+            "Limitations / Assumptions": item.limitations_or_assumptions,
+        }
+        for item in report.analytics_plan.plan
+    ]
+    st.dataframe(rows, use_container_width=True, hide_index=True)
+
+
+def render_insight_synthesis_tab(report) -> None:
+    render_section_header(
+        "Insight Synthesis",
+        "Consulting-grade insights synthesized from the business context, data profile, and saved predefined analyses.",
+    )
+    synthesis = report.insight_synthesis
+    if not synthesis:
+        render_empty_state("No insight synthesis", "Insight synthesis has not been generated yet.")
+        return
+
+    metric_cols = st.columns(2)
+    with metric_cols[0]:
+        render_metric_card("Confidence", synthesis.confidence_level.title())
+        render_confidence_badge(synthesis.confidence_level.title())
+    with metric_cols[1]:
+        render_metric_card("Hypotheses Assessed", str(len(synthesis.hypothesis_support_status)))
+
+    render_summary_card("Key Insights", synthesis.key_insights)
+
+    st.markdown("### Observations")
+    render_concise_bullets(synthesis.observations)
+
+    st.markdown("### Supporting Evidence")
+    render_concise_bullets(synthesis.supporting_evidence)
+
+    st.markdown("### Business Implications")
+    render_concise_bullets(synthesis.business_implications)
+
+    st.markdown("### Recommended Actions")
+    render_concise_bullets(synthesis.recommended_actions)
+
+    st.markdown("### Hypothesis Support Status")
+    status_rows = [
+        {
+            "Hypothesis": item.hypothesis,
+            "Status": item.status.replace("_", " ").title(),
+            "Rationale": item.rationale,
+        }
+        for item in synthesis.hypothesis_support_status
+    ]
+    if status_rows:
+        st.dataframe(status_rows, use_container_width=True, hide_index=True)
+    else:
+        render_empty_state("No hypothesis support assessment", "The synthesis did not include hypothesis support statuses.")
+
+    with st.expander("Limitations"):
+        render_concise_bullets(synthesis.limitations)
+
 
 def render_strategic_options_tab(report) -> None:
-    render_section_header("Strategic Options", "Alternative paths and tradeoffs for management decision-making.")
+    render_section_header("Strategic Options", "Alternative paths, tradeoffs, and management implications.")
     rows = [
         {
             "Option": item.option,
             "Description": item.description,
             "Upside": item.upside,
             "Downside": item.downside,
+            "Expected Impact": item.expected_impact,
+            "Investment": item.investment_required,
+            "Confidence": item.confidence_level,
             "Decision Implication": item.decision_implication,
         }
         for item in report.strategic_options
@@ -472,7 +1010,7 @@ def render_strategic_options_tab(report) -> None:
 
 
 def render_financials_tab(report) -> None:
-    render_section_header("Financials", "Financial assumptions, scenario analysis, and assumption register.")
+    render_section_header("Financials", "Directional financial logic, scenarios, and assumptions for validation.")
     if not report.financial_assumptions:
         st.info("Financial assumptions not generated yet.")
         return
@@ -490,8 +1028,8 @@ def render_financials_tab(report) -> None:
     ]
     st.markdown("### Scenario Analysis")
     st.dataframe(scenarios, use_container_width=True, hide_index=True)
-    with st.expander("Assumption Register"):
-        render_assumption_table(report.assumption_register)
+    st.markdown("### Sensitivities")
+    render_concise_bullets(report.financial_assumptions.sensitivities)
 
 
 def render_risks_tab(report) -> None:
@@ -504,20 +1042,37 @@ def render_risks_tab(report) -> None:
     render_concise_bullets(report.data_gaps, expander_label="More data gaps")
 
 
-def render_action_plan_tab(report) -> None:
+def render_execution_tab(report) -> None:
     render_section_header("Action Plan", "Next 30 / 60 / 90 day execution path.")
     render_action_plan(report.action_plan)
+    render_section_header("Decision Roadmap", "Stage gates and validation milestones.")
+    render_concise_bullets(report.decision_roadmap)
+
+
+def render_stakeholder_lens_tab(report) -> None:
+    render_section_header("Stakeholder Lens", "How key leaders are likely to evaluate the recommendation.")
+    rows = [
+        {"Stakeholder": stakeholder, "Likely Lens": "; ".join(items)}
+        for stakeholder, items in report.stakeholder_lens.items()
+    ]
+    st.dataframe(rows, use_container_width=True, hide_index=True)
+    render_section_header("Consulting Work Automated", "Repeatable consulting work accelerated by this workflow.")
+    render_concise_bullets(report.consulting_work_automated)
+    render_section_header("Human Judgment Still Needed", "Areas requiring consultant, operator, or executive review.")
+    render_concise_bullets(report.human_judgment_needed)
 
 
 def render_deck_outline_tab(report) -> None:
-    render_section_header("Deck Outline", "Suggested 10-slide management presentation storyline.")
+    render_section_header("Slide Storyline", "Suggested executive presentation storyline using Pyramid Principle.")
     if not report.deck_outline:
         st.info("Deck outline not generated yet.")
         return
+    render_summary_card("Pyramid Principle Storyline", report.deck_outline.pyramid_principle_storyline)
     rows = [
         {
             "#": item.slide_number,
             "Slide": item.title,
+            "Pyramid Role": item.pyramid_role,
             "Core Message": item.core_message,
             "Suggested Visual": item.suggested_visual,
             "Key Bullets": "; ".join(item.key_bullets),
@@ -528,8 +1083,11 @@ def render_deck_outline_tab(report) -> None:
 
 
 def render_critic_review_tab(report) -> None:
-    render_section_header("Critic Review", "Quality notes from the senior-manager critic plus user evaluation.")
+    render_section_header("Critic Review", "Partner-style quality notes plus user evaluation.")
     render_critic_review(report.critic)
+    if report.critic and report.critic.red_team_challenges:
+        render_section_header("Red Team Challenges", "Objections likely to come from a skeptical senior stakeholder.")
+        render_concise_bullets(report.critic.red_team_challenges)
     st.divider()
     render_evaluation_tab(report.business_input)
 
@@ -561,8 +1119,8 @@ def _render_bullets(items: list[str]) -> None:
 
 
 def render_evaluation_tab(business_input: BusinessProblemInput) -> None:
-    render_section_header("Quality Score", "Score the generated consulting output and maintain a lightweight review history.")
-    st.caption("Score the generated consulting output from 1 to 5. For hallucination risk, 1 means low risk and 5 means high risk.")
+    render_section_header("Quality Score", "Score the generated first-pass output and maintain a lightweight review history.")
+    st.caption("Score the AI-assisted output from 1 to 5. For hallucination risk, 1 means low risk and 5 means high risk.")
 
     with st.form("evaluation_form"):
         col1, col2 = st.columns(2)
@@ -640,13 +1198,14 @@ def main() -> None:
     render_startup_status(validation, config)
 
     render_hero(
-        "AI Business Consulting Agent",
-        "Turn a business question into a structured recommendation, financial logic, pitch deck outline, and critic-reviewed executive report.",
+        "AI Consulting Operating System",
+        "Accelerate first-pass strategy and analytics work with structured problem solving, recommendation drafting, executive deck generation, and partner-style critique.",
     )
 
     if not config.has_api_key:
         st.error(config.missing_api_key_message)
 
+    render_uploaded_data_profile_preview()
     business_input = render_input_form()
 
     if business_input and config.has_api_key:
@@ -671,6 +1230,8 @@ def main() -> None:
                 report = run_consulting_workflow(
                     input_data=business_input,
                     config=workflow_config,
+                    data_profile=st.session_state.get("data_profile"),
+                    analysis_results=st.session_state.get("analysis_results", []),
                     progress_callback=update_progress,
                 )
 
@@ -706,6 +1267,61 @@ def main() -> None:
             logger.exception("streamlit_error status=unexpected error_type=%s", type(exc).__name__)
 
     render_outputs()
+
+
+def render_uploaded_data_profile_preview() -> None:
+    profile = st.session_state.get("data_profile")
+    if not profile or st.session_state.get("report"):
+        return
+    with st.expander(f"Uploaded data profile: {profile.file_name}", expanded=False):
+        render_data_profile(profile)
+        render_analytics_workbench()
+
+
+def _dict_table(values: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    rows = []
+    for name, details in values.items():
+        row = {"Column": name}
+        row.update(details)
+        rows.append(row)
+    return rows
+
+
+def _analysis_availability_note(
+    selected: str,
+    numeric_columns: list[str],
+    categorical_columns: list[str],
+) -> str:
+    if selected == "Data Exploration":
+        return "Available for any uploaded dataframe. Produces column diagnostics, quality warnings, and next-step analysis guidance."
+    if selected == "Segmentation Analysis":
+        return f"Requires one segment/group column and one numeric metric column. Found {len(categorical_columns)} categorical and {len(numeric_columns)} numeric columns."
+    return "Select an analysis mode."
+
+
+def _format_list_for_display(values: object) -> str:
+    if not values:
+        return "None detected."
+    if isinstance(values, list):
+        return "; ".join(str(value) for value in values) if values else "None detected."
+    return str(values)
+
+
+def _format_top_values(values: object) -> str:
+    if not isinstance(values, list) or not values:
+        return "Not provided."
+    return "; ".join(
+        f"{item.get('value')} ({item.get('frequency')}, {item.get('share_pct')}%)"
+        for item in values
+        if isinstance(item, dict)
+    ) or "Not provided."
+
+
+def _render_optional_dataframe(rows: object, empty_message: str) -> None:
+    if isinstance(rows, list) and rows:
+        st.dataframe(rows, use_container_width=True, hide_index=True)
+    else:
+        render_empty_state("No data", empty_message)
 
 
 if __name__ == "__main__":

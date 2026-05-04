@@ -347,6 +347,7 @@ def render_assumption_table(assumptions) -> None:
                     "Source": item.source,
                     "Importance": item.importance,
                     "Validation Needed": item.validation_needed,
+                    "Status": getattr(item, "status", "Assumption - no uploaded data provided."),
                 }
             )
     if rows:

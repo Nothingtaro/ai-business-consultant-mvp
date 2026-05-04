@@ -65,7 +65,7 @@ class DeckDesign:
     soft_red = RGBColor(252, 236, 237)
     soft_violet = RGBColor(239, 238, 252)
 
-    footer_text = "AI Business Consulting Agent"
+    footer_text = "AI Consulting Operating System"
 
 
 DESIGN = DeckDesign()
@@ -87,13 +87,14 @@ def build_pptx_report(report: FinalConsultingReport) -> bytes:
     add_decision_context_slide(presentation, content.slides[3])
     add_issue_tree_slide(presentation, content.slides[4])
     add_hypotheses_slide(presentation, content.slides[5])
-    add_options_comparison_slide(presentation, content.slides[6])
-    add_recommendation_slide(presentation, content.slides[7])
-    add_financials_slide(presentation, content.slides[8])
-    add_risks_slide(presentation, content.slides[9])
-    add_action_plan_slide(presentation, content.slides[10])
-    add_deck_storyboard_slide(presentation, content.slides[11])
-    add_critic_review_slide(presentation, content.slides[12])
+    add_analytics_plan_slide(presentation, content.slides[6])
+    add_options_comparison_slide(presentation, content.slides[7])
+    add_recommendation_slide(presentation, content.slides[8])
+    add_financials_slide(presentation, content.slides[9])
+    add_risks_slide(presentation, content.slides[10])
+    add_action_plan_slide(presentation, content.slides[11])
+    add_deck_storyboard_slide(presentation, content.slides[12])
+    add_critic_review_slide(presentation, content.slides[13])
     add_appendix_slide_if_needed(presentation, content)
 
     output = BytesIO()
@@ -109,9 +110,9 @@ def add_title_slide(presentation: Presentation, content: SlideContent) -> None:
     _shape(slide, Inches(3.25), 0, Inches(0.09), DESIGN.slide_height, DESIGN.teal, DESIGN.teal)
     _shape(slide, Inches(3.34), Inches(0.0), Inches(9.99), Inches(0.18), DESIGN.blue, DESIGN.blue)
 
-    _textbox(slide, "EXECUTIVE AI STRATEGY DECK", Inches(0.58), Inches(0.55), Inches(2.2), Inches(0.22), 7, DESIGN.white, bold=True)
-    _textbox(slide, "Business\nDecision\nPackage", Inches(0.58), Inches(1.08), Inches(2.25), Inches(1.85), 27, DESIGN.white, bold=True)
-    _textbox(slide, "Structured analysis for management review", Inches(0.58), Inches(6.62), Inches(2.15), Inches(0.42), 8, RGBColor(198, 209, 222))
+    _textbox(slide, "FIRST-PASS EXECUTIVE STRATEGY DECK", Inches(0.58), Inches(0.55), Inches(2.3), Inches(0.28), 6.7, DESIGN.white, bold=True)
+    _textbox(slide, "Strategy\nWork\nProduct", Inches(0.58), Inches(1.08), Inches(2.25), Inches(1.85), 27, DESIGN.white, bold=True)
+    _textbox(slide, "AI-assisted analysis for human review", Inches(0.58), Inches(6.62), Inches(2.15), Inches(0.42), 8, RGBColor(198, 209, 222))
 
     _textbox(slide, content.title, Inches(3.85), Inches(0.92), Inches(8.55), Inches(0.55), 28, DESIGN.ink, bold=True)
     _textbox(slide, content.payload["problem"], Inches(3.88), Inches(1.72), Inches(8.55), Inches(1.05), 16, DESIGN.muted)
@@ -192,6 +193,25 @@ def add_hypotheses_slide(presentation: Presentation, content: SlideContent) -> N
     _callout(slide, "Initial Lean", content.payload.get("initial_lean", content.key_message), DESIGN.margin_x, Inches(5.85), Inches(12.15), Inches(0.68), DESIGN.gold)
 
 
+def add_analytics_plan_slide(presentation: Presentation, content: SlideContent) -> None:
+    slide = _content_slide(presentation, content)
+    table = content.payload.get("table")
+    if not table or not table.headers:
+        _empty_state(slide)
+        return
+    _hero_message(slide, "Analytics Planning Note", content.key_message, DESIGN.margin_x, Inches(1.08), Inches(12.15), Inches(0.82), DESIGN.teal)
+    _table(
+        slide,
+        table,
+        DESIGN.margin_x,
+        Inches(2.24),
+        Inches(12.15),
+        Inches(4.28),
+        col_widths=[Inches(3.15), Inches(2.0), Inches(3.0), Inches(4.0)],
+        font_size=6.7,
+    )
+
+
 def add_options_comparison_slide(presentation: Presentation, content: SlideContent) -> None:
     slide = _content_slide(presentation, content)
     options = content.payload.get("options", [])
@@ -204,10 +224,10 @@ def add_options_comparison_slide(presentation: Presentation, content: SlideConte
         _option_card(slide, index + 1, option, left, Inches(1.18), Inches(3.88), Inches(2.25), SOFT_FILLS[index], ACCENTS[index])
         left += Inches(4.14)
 
-    rows = [(item["option"], item["upside"], item["downside"], item["implication"]) for item in options]
+    rows = [(item["option"], item["impact"], item["confidence"], item["implication"]) for item in options]
     _table(
         slide,
-        SlideTable(["Option", "Upside", "Downside", "Implication"], rows),
+        SlideTable(["Option", "Impact", "Confidence", "Implication"], rows),
         DESIGN.margin_x,
         Inches(3.82),
         Inches(12.15),
@@ -268,7 +288,16 @@ def add_deck_storyboard_slide(presentation: Presentation, content: SlideContent)
     if not table:
         _empty_state(slide)
         return
-    _table(slide, table, DESIGN.margin_x, Inches(1.08), Inches(12.15), Inches(5.72), col_widths=[Inches(0.5), Inches(2.55), Inches(6.8), Inches(2.3)], font_size=6.8)
+    _table(
+        slide,
+        table,
+        DESIGN.margin_x,
+        Inches(1.08),
+        Inches(12.15),
+        Inches(5.72),
+        col_widths=[Inches(0.45), Inches(2.05), Inches(1.8), Inches(5.55), Inches(2.3)],
+        font_size=6.5,
+    )
 
 
 def add_critic_review_slide(presentation: Presentation, content: SlideContent) -> None:
@@ -308,7 +337,7 @@ def _content_slide(presentation: Presentation, content: SlideContent):
     slide_number = len(presentation.slides)
     _shape(slide, 0, 0, DESIGN.slide_width, Inches(0.12), DESIGN.navy, DESIGN.navy)
     _shape(slide, 0, Inches(0.12), Inches(0.09), DESIGN.slide_height - Inches(0.12), DESIGN.teal, DESIGN.teal)
-    _textbox(slide, "EXECUTIVE AI STRATEGY DECK", DESIGN.margin_x, Inches(0.28), Inches(2.8), Inches(0.18), DESIGN.font_kicker, DESIGN.blue, bold=True)
+    _textbox(slide, "FIRST-PASS EXECUTIVE STRATEGY DECK", DESIGN.margin_x, Inches(0.28), Inches(3.0), Inches(0.18), DESIGN.font_kicker, DESIGN.blue, bold=True)
     _textbox(slide, content.title, DESIGN.margin_x, Inches(0.53), Inches(8.65), Inches(0.4), DESIGN.font_title, DESIGN.ink, bold=True)
     _textbox(slide, content.subtitle, Inches(9.35), Inches(0.58), Inches(3.1), Inches(0.22), DESIGN.font_subtitle, DESIGN.muted, align=PP_ALIGN.RIGHT)
     _footer(slide, slide_number)

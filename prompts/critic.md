@@ -26,6 +26,7 @@ Return a structured critic review with:
 - weaknesses: direct bullets naming analytical weaknesses across the review dimensions.
 - critical_gaps: missing data, assumptions, logic, or evidence that could change the decision.
 - recommended_improvements: concrete revisions the analyst should make before presenting.
+- red_team_challenges: partner-style objections that a skeptical executive, CFO, operator, or data leader would raise.
 - final_verdict: a blunt management-level judgment on whether the output is ready, conditionally ready, or not ready.
 
-Be specific. Do not flatter. Do not write generic feedback. Tie criticism to the actual prior workflow outputs.
+Be specific. Do not flatter. Do not write generic feedback. Tie criticism to the actual prior workflow outputs. Explicitly call out where human consultant or executive judgment is still required.

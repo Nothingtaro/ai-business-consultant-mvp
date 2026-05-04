@@ -17,5 +17,8 @@ For each slide, include:
 - Core message
 - Suggested visual
 - Key bullets
+- Pyramid Principle role, such as governing thought, supporting argument, evidence, option comparison, recommendation, or execution.
 
-The deck should tell a coherent strategy story from context to recommendation to execution plan.
+Also include a concise Pyramid Principle storyline: governing thought followed by the 3-5 supporting arguments.
+
+The deck should tell a coherent strategy story from context to recommendation to execution plan. Clearly label assumption-led pages where data has not been uploaded.
